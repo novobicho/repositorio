@@ -1,0 +1,32 @@
+# Configuração para DigitalOcean App Platform
+
+name: jogo-do-bicho
+region: nyc
+services:
+- name: web
+  github:
+    branch: main
+    deploy_on_push: true
+    repo: GITHUB_USERNAME/REPO_NAME # Substitua pelos seus valores
+  http_port: 5000
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  source_dir: /
+  routes:
+  - path: /
+  envs:
+  - key: NODE_ENV
+    value: production
+  - key: SESSION_SECRET
+    value: YOUR_SESSION_SECRET # Substitua com um valor seguro
+  - key: PUSHIN_PAY_TOKEN
+    value: YOUR_PUSHIN_PAY_TOKEN # Substitua com seu token
+
+databases:
+- name: db
+  engine: PG
+  version: "14"
+  production: false
+  cluster_name: jogo-do-bicho-db
+  db_name: bicho
+  db_user: bicho_user

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guia de Hospedagem no DigitalOcean</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      color: #0069ff;
+      text-align: center;
+      border-bottom: 2px solid #0069ff;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #0069ff;
+      margin-top: 30px;
+    }
+    h3 {
+      color: #0069ff;
+    }
+    code {
+      background-color: #f4f4f4;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    pre {
+      background-color: #f4f4f4;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 20px auto;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .warning {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .note {
+      background-color: #e7f5ff;
+      border-left: 4px solid #0069ff;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .step {
+      background-color: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .step-number {
+      background-color: #0069ff;
+      color: white;
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      text-align: center;
+      border-radius: 50%;
+      margin-right: 10px;
+      line-height: 30px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+  <h1
+  id="guia-completo-de-hospedagem-do-jogo-do-bicho-no-digitalocean">Guia
+  Completo de Hospedagem do Jogo do Bicho no DigitalOcean</h1>
+  <h2 id="introdução">Introdução</h2>
+  <p>Este guia detalhado irá mostrar como realizar a hospedagem do
+  sistema de Jogo do Bicho na plataforma DigitalOcean, desde o processo
+  de download dos arquivos até a configuração completa e funcionamento
+  do site.</p>
+  <h2 id="pré-requisitos">Pré-requisitos</h2>
+  <ol type="1">
+  <li>Uma conta na DigitalOcean (você precisará de um cartão de crédito
+  para criar uma conta)</li>
+  <li>Conhecimentos básicos de linha de comando</li>
+  <li>Acesso ao código-fonte do seu projeto no Replit</li>
+  </ol>
+  <h2 id="índice">Índice</h2>
+  <ol type="1">
+  <li>Baixando os arquivos do Replit</li>
+  <li>Criando uma conta na DigitalOcean</li>
+  <li>Configurando o App Platform</li>
+  <li>Configurando o banco de dados PostgreSQL</li>
+  <li>Configurando variáveis de ambiente</li>
+  <li>Implantando a aplicação</li>
+  <li>Configurando domínio personalizado (opcional)</li>
+  <li>Monitoramento e manutenção</li>
+  </ol>
+  <h2 id="baixando-os-arquivos-do-replit">1. Baixando os arquivos do
+  Replit</h2>
+  <h3 id="exportando-o-código-do-replit">1.1. Exportando o código do
+  Replit</h3>
+  <ol type="1">
+  <li>Abra seu projeto no Replit</li>
+  <li>No canto inferior esquerdo, clique nos três pontos (…) ao lado do
+  nome do seu repl</li>
+  <li>Selecione “Download as zip”</li>
+  <li>Salve o arquivo .zip em seu computador</li>
+  <li>Extraia o arquivo .zip para uma pasta em seu computador</li>
+  </ol>
+  <h3 id="verificando-a-estrutura-do-projeto">1.2. Verificando a
+  estrutura do projeto</h3>
+  <p>Após extrair, você deverá ter uma estrutura semelhante a esta:</p>
+  <pre><code>/seu-projeto/
+  /client/
+  /server/
+  /shared/
+  package.json
+  package-lock.json
+  ... (outros arquivos)</code></pre>
+  <p>Certifique-se de que todos os arquivos essenciais estão
+  presentes.</p>
+  <h2 id="criando-uma-conta-na-digitalocean">2. Criando uma conta na
+  DigitalOcean</h2>
+  <h3 id="registro-na-plataforma">2.1. Registro na plataforma</h3>
+  <ol type="1">
+  <li>Acesse <a
+  href="https://www.digitalocean.com/">https://www.digitalocean.com/</a></li>
+  <li>Clique em “Sign Up” no canto superior direito</li>
+  <li>Preencha seus dados e informações de pagamento</li>
+  <li>Verifique seu e-mail e ative sua conta</li>
+  </ol>
+  <h3 id="configurando-método-de-pagamento">2.2. Configurando método de
+  pagamento</h3>
+  <ol type="1">
+  <li>Após o login, vá para “Billing” na barra lateral</li>
+  <li>Adicione um cartão de crédito se ainda não o fez</li>
+  <li>Você receberá créditos gratuitos para novos usuários (geralmente
+  $100 por 60 dias)</li>
+  </ol>
+  <h2 id="configurando-o-app-platform">3. Configurando o App
+  Platform</h2>
+  <h3 id="criando-um-repositório-git">3.1. Criando um repositório
+  Git</h3>
+  <p>Antes de prosseguir, é necessário colocar seu código em um
+  repositório Git (GitHub, GitLab, etc.):</p>
+  <ol type="1">
+  <li>Crie uma conta no GitHub se ainda não tiver: <a
+  href="https://github.com/">https://github.com/</a></li>
+  <li>Crie um novo repositório</li>
+  <li>Na pasta local do seu projeto, inicialize um repositório Git:</li>
+  </ol>
+  <div class="sourceCode" id="cb2"><pre
+  class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> init</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> add .</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> commit <span class="at">-m</span> <span class="st">&quot;Versão inicial&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> branch <span class="at">-M</span> main</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> remote add origin https://github.com/seu-usuario/seu-repositorio.git</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> push <span class="at">-u</span> origin main</span></code></pre></div>
+  <h3 id="criando-um-aplicativo-no-app-platform">3.2. Criando um
+  aplicativo no App Platform</h3>
+  <ol type="1">
+  <li>No painel da DigitalOcean, clique em “Create” no canto superior
+  direito</li>
+  <li>Selecione “Apps” na lista de opções</li>
+  <li>Escolha o repositório Git onde você armazenou o código
+  <ul>
+  <li>Você precisará conectar sua conta GitHub/GitLab à
+  DigitalOcean</li>
+  <li>Selecione o repositório que contém o código</li>
+  <li>Escolha a branch (geralmente “main”)</li>
+  </ul></li>
+  </ol>
+  <h3 id="configurando-o-aplicativo">3.3. Configurando o aplicativo</h3>
+  <ol type="1">
+  <li>Na tela de configuração, o DigitalOcean tentará detectar
+  automaticamente o tipo de aplicativo</li>
+  <li>Confirme que é um aplicativo “Node.js”</li>
+  <li>Defina o diretório raiz como “/” (raiz do repositório)</li>
+  <li>Configure o comando de build:
+  <code>npm install &amp;&amp; npm run build</code></li>
+  <li>Configure o comando de execução:
+  <code>node server/index.js</code></li>
+  <li>Defina o HTTP port como “5000” (porta que o servidor Express
+  usa)</li>
+  </ol>
+  <h2 id="configurando-o-banco-de-dados-postgresql">4. Configurando o
+  banco de dados PostgreSQL</h2>
+  <h3 id="adicionando-um-componente-de-banco-de-dados">4.1. Adicionando
+  um componente de banco de dados</h3>
+  <ol type="1">
+  <li>Na mesma tela de configuração do App Platform, role para baixo e
+  clique em “Add Component”</li>
+  <li>Selecione “Database”</li>
+  <li>Escolha “PostgreSQL”</li>
+  <li>Selecione um plano que atenda às suas necessidades (o plano básico
+  é suficiente para começar)</li>
+  </ol>
+  <h3 id="conectando-o-banco-de-dados-ao-aplicativo">4.2. Conectando o
+  banco de dados ao aplicativo</h3>
+  <ol type="1">
+  <li>Após adicionar o componente de banco de dados, a DigitalOcean
+  criará automaticamente uma variável de ambiente
+  <code>DATABASE_URL</code></li>
+  <li>Certifique-se de que esta variável está listada na seção
+  “Environment Variables”</li>
+  </ol>
+  <h2 id="configurando-variáveis-de-ambiente">5. Configurando variáveis
+  de ambiente</h2>
+  <h3 id="adicionando-variáveis-necessárias">5.1. Adicionando variáveis
+  necessárias</h3>
+  <p>Na seção “Environment Variables”, adicione as seguintes
+  variáveis:</p>
+  <ol type="1">
+  <li><code>NODE_ENV</code> = <code>production</code></li>
+  <li><code>SESSION_SECRET</code> =
+  <code>[gere uma string aleatória longa]</code></li>
+  <li><code>PUSHIN_PAY_TOKEN</code> =
+  <code>[seu token do gateway de pagamento]</code></li>
+  </ol>
+  <p>Para gerar uma string aleatória para SESSION_SECRET, você pode
+  usar:</p>
+  <div class="sourceCode" id="cb3"><pre
+  class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> <span class="at">-e</span> <span class="st">&quot;console.log(require(&#39;crypto&#39;).randomBytes(32).toString(&#39;hex&#39;))&quot;</span></span></code></pre></div>
+  <h3 id="verificando-todas-as-variáveis">5.2. Verificando todas as
+  variáveis</h3>
+  <p>Certifique-se de que todas as variáveis necessárias estão
+  configuradas. A lista completa deve incluir:</p>
+  <ul>
+  <li><code>DATABASE_URL</code> (automaticamente criada pelo
+  DigitalOcean)</li>
+  <li><code>NODE_ENV</code></li>
+  <li><code>SESSION_SECRET</code></li>
+  <li><code>PUSHIN_PAY_TOKEN</code></li>
+  <li><code>PGHOST</code> (automaticamente criada)</li>
+  <li><code>PGPASSWORD</code> (automaticamente criada)</li>
+  <li><code>PGUSER</code> (automaticamente criada)</li>
+  <li><code>PGDATABASE</code> (automaticamente criada)</li>
+  <li><code>PGPORT</code> (automaticamente criada)</li>
+  </ul>
+  <h2 id="implantando-a-aplicação">6. Implantando a aplicação</h2>
+  <h3 id="revisando-e-confirmando-a-implantação">6.1. Revisando e
+  confirmando a implantação</h3>
+  <ol type="1">
+  <li>Revise todas as configurações na tela de resumo</li>
+  <li>Escolha a região mais próxima do seu público-alvo (provavelmente
+  Brasil)</li>
+  <li>Defina um nome para seu aplicativo</li>
+  <li>Verifique o custo estimado mensal</li>
+  <li>Clique em “Launch App” para iniciar a implantação</li>
+  </ol>
+  <h3 id="monitorando-o-processo-de-implantação">6.2. Monitorando o
+  processo de implantação</h3>
+  <ol type="1">
+  <li>O DigitalOcean iniciará o processo de implantação</li>
+  <li>Você pode acompanhar o progresso na página do aplicativo</li>
+  <li>A implantação pode levar de 5 a 15 minutos</li>
+  </ol>
+  <h3 id="verificando-a-implantação">6.3. Verificando a implantação</h3>
+  <ol type="1">
+  <li>Quando a implantação for concluída, você verá um status
+  “Running”</li>
+  <li>Clique no URL gerado pelo DigitalOcean para acessar seu
+  aplicativo</li>
+  <li>Verifique se o site está funcionando corretamente</li>
+  </ol>
+  <h2 id="configurando-domínio-personalizado-opcional">7. Configurando
+  domínio personalizado (opcional)</h2>
+  <h3 id="adicionando-um-domínio">7.1. Adicionando um domínio</h3>
+  <ol type="1">
+  <li>Na página do seu aplicativo, vá para a guia “Settings”</li>
+  <li>Role até a seção “Domains”</li>
+  <li>Clique em “Add Domain”</li>
+  <li>Digite seu nome de domínio (ex: “jogodubicho.com.br”)</li>
+  </ol>
+  <h3 id="configurando-registros-dns">7.2. Configurando registros
+  DNS</h3>
+  <ol type="1">
+  <li>O DigitalOcean fornecerá instruções sobre como configurar seus
+  registros DNS</li>
+  <li>Você precisará adicionar um registro CNAME ou A no seu provedor de
+  DNS</li>
+  <li>Aponte o registro para o domínio fornecido pelo DigitalOcean</li>
+  <li>A propagação DNS pode levar até 48 horas</li>
+  </ol>
+  <h3 id="habilitando-https">7.3. Habilitando HTTPS</h3>
+  <ol type="1">
+  <li>Após a verificação do domínio, o DigitalOcean configurará
+  automaticamente um certificado SSL</li>
+  <li>Você não precisa fazer nada extra para habilitar HTTPS</li>
+  </ol>
+  <h2 id="monitoramento-e-manutenção">8. Monitoramento e manutenção</h2>
+  <h3 id="monitorando-o-desempenho">8.1. Monitorando o desempenho</h3>
+  <ol type="1">
+  <li>Na página do seu aplicativo, vá para a guia “Insights”</li>
+  <li>Visualize métricas de CPU, memória e requisições</li>
+  <li>Configure alertas para ser notificado sobre problemas</li>
+  </ol>
+  <h3 id="configurando-implantação-contínua-opcional">8.2. Configurando
+  implantação contínua (opcional)</h3>
+  <ol type="1">
+  <li>Por padrão, novas implantações são acionadas quando você faz push
+  para a branch principal</li>
+  <li>Você pode configurar isso nas configurações do aplicativo</li>
+  </ol>
+  <h3 id="fazendo-backup-do-banco-de-dados">8.3. Fazendo backup do banco
+  de dados</h3>
+  <ol type="1">
+  <li>Na página do banco de dados PostgreSQL, vá para “Backups”</li>
+  <li>Configure backups automáticos</li>
+  <li>Você também pode fazer backups manuais quando necessário</li>
+  </ol>
+  <h2 id="inicialização-do-banco-de-dados">9. Inicialização do banco de
+  dados</h2>
+  <h3 id="executando-o-script-de-inicialização">9.1. Executando o script
+  de inicialização</h3>
+  <p>Após a implantação inicial, você precisará inicializar o banco de
+  dados:</p>
+  <ol type="1">
+  <li>No painel do App Platform, vá para a guia “Console”</li>
+  <li>Digite o seguinte comando para acessar o console do seu
+  aplicativo:</li>
+  </ol>
+  <div class="sourceCode" id="cb4"><pre
+  class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run db:push</span></code></pre></div>
+  <p>Isso executará o script Drizzle para criar as tabelas necessárias
+  no banco de dados.</p>
+  <h3 id="verificando-as-tabelas-do-banco">9.2 Verificando as tabelas do
+  banco</h3>
+  <p>Verifique se as tabelas foram criadas corretamente:</p>
+  <div class="sourceCode" id="cb5"><pre
+  class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">psql</span> <span class="va">$DATABASE_URL</span> <span class="at">-c</span> <span class="st">&quot;\dt&quot;</span></span></code></pre></div>
+  <h2 id="considerações-finais">Considerações finais</h2>
+  <h3 id="custos">Custos</h3>
+  <ul>
+  <li>O plano básico do App Platform custa aproximadamente $5/mês</li>
+  <li>O banco de dados PostgreSQL básico custa aproximadamente
+  $15/mês</li>
+  <li>Custo total estimado: $20-25/mês</li>
+  </ul>
+  <h3 id="escalabilidade">Escalabilidade</h3>
+  <ul>
+  <li>Você pode facilmente aumentar os recursos do seu aplicativo
+  conforme necessário</li>
+  <li>O App Platform oferece escalonamento automático para lidar com
+  picos de tráfego</li>
+  </ul>
+  <h3 id="suporte">Suporte</h3>
+  <ul>
+  <li>DigitalOcean oferece suporte via ticket e uma extensa
+  documentação</li>
+  <li>A comunidade DigitalOcean também é muito ativa em fóruns e no
+  StackOverflow</li>
+  </ul>
+  <h2 id="problemas-comuns-e-soluções">Problemas comuns e soluções</h2>
+  <h3 id="erro-de-conexão-com-o-banco-de-dados">Erro de conexão com o
+  banco de dados</h3>
+  <ul>
+  <li>Verifique se a variável DATABASE_URL está correta</li>
+  <li>Certifique-se de que o banco de dados está rodando</li>
+  <li>Verifique os logs para mensagens de erro específicas</li>
+  </ul>
+  <h3 id="aplicativo-não-inicia">Aplicativo não inicia</h3>
+  <ul>
+  <li>Verifique os logs do aplicativo na guia “Logs”</li>
+  <li>Certifique-se de que todas as variáveis de ambiente estão
+  configuradas</li>
+  <li>Verifique se o comando de start está correto</li>
+  </ul>
+  <h3 id="problemas-com-pagamentos">Problemas com pagamentos</h3>
+  <ul>
+  <li>Verifique se o token PUSHIN_PAY_TOKEN está configurado
+  corretamente</li>
+  <li>Certifique-se de que o gateway de pagamento está ativo</li>
+  <li>Verifique os logs para mensagens de erro específicas</li>
+  </ul>
+  <hr />
+  <p>Este guia deve ajudá-lo a hospedar com sucesso seu sistema de Jogo
+  do Bicho na plataforma DigitalOcean. Se você encontrar problemas
+  específicos, consulte a documentação oficial da DigitalOcean ou entre
+  em contato com o suporte.</p>
+</body>
+</html>
