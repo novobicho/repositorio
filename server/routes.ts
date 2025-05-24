@@ -3927,7 +3927,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             
             // Construir URL para consulta do status conforme documentação da Pushin Pay
-            // Endpoint correto para consulta de PIX: /api/pix/transactions/:id
+            // Endpoint correto para consulta de PIX: /api/pix/transactions/{ID}
             const apiUrl = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
             
             console.log(`Verificando status da transação ${transaction.externalId} na API Pushin Pay`);
