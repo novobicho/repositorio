@@ -4118,19 +4118,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Garantir que o valor tem 2 casas decimais
         amount = parseFloat(amount.toFixed(2));
         
-        // IMPORTANTE: A API da Pushin Pay aparentemente espera valor em centavos (inteiro)
-        // R$ 50,00 deve ser enviado como 5000 (cinquenta reais em centavos)
-        const amountInCents = Math.round(amount * 100);
-        
+        // Conforme documentação da Pushin Pay, o valor deve ser enviado como número decimal
+        // Exemplo: R$ 35,00 deve ser enviado como 35 (não em centavos)
         const requestData = {
-          value: amountInCents, // Enviar o valor em centavos (formato inteiro)
+          value: amount, // Enviar o valor como decimal (R$ 35,00 = 35)
           webhook_url: webhookUrl
         };
         
         console.log(`Valor original do usuário: R$${amount.toFixed(2)}`);
-        console.log(`Valor convertido para centavos: ${amountInCents}`);
-        console.log(`Formato do valor enviado: ${typeof amountInCents}, valor em centavos: ${amountInCents}`);
-        console.log(`Valor formatado como JSON: ${JSON.stringify(amountInCents)}`);
+        console.log(`Valor enviado para API: ${amount}`);
+        console.log(`Formato do valor enviado: ${typeof amount}`);
         
         console.log("Dados da requisição:", requestData);
         
