@@ -3582,7 +3582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let verifiedWithV2 = false;
             
             try {
-              const apiUrlV2 = `https://api.pushinpay.com.br/api/v2/transactions/${transaction.externalId}`;
+              const apiUrlV2 = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
               
               const responseV2 = await fetch(apiUrlV2, {
                 method: 'GET',
@@ -3926,11 +3926,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return res.status(400).json({ message: "Token da API não configurado" });
             }
             
-            // Construir URL para consulta do status
-            // A API correta para consulta de status do PIX na Pushin Pay
-            // O endpoint correto é /api/v2/transactions/:id e também existe /api/pix/v1/transaction/:id
-            // Vamos tentar ambos os endpoints para garantir compatibilidade com diferentes versões da API
-            const apiUrl = `https://api.pushinpay.com.br/api/v2/transactions/${transaction.externalId}`;
+            // Construir URL para consulta do status conforme documentação da Pushin Pay
+            // Endpoint correto para consulta de PIX: /api/pix/transactions/:id
+            const apiUrl = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
             
             console.log(`Verificando status da transação ${transaction.externalId} na API Pushin Pay`);
             
