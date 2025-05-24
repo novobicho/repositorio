@@ -3681,7 +3681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let verifiedWithV1 = false;
             
             try {
-              const apiUrlV1 = `https://api.pushinpay.com.br/api/pix/v1/transaction/${transaction.externalId}`;
+              const apiUrlV1 = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
               
               const responseV1 = await fetch(apiUrlV1, {
                 method: 'GET',
