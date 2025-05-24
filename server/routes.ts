@@ -4066,9 +4066,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Valor inválido para depósito" });
       }
       
-      console.log('Valor convertido:', amount);
+      // Verificar valor mínimo conforme documentação Pushin Pay (50 centavos)
+      if (amount < 0.50) {
+        return res.status(400).json({ 
+          message: "Valor mínimo para depósito é R$ 0,50" 
+        });
+      }
       
-      // Já fizemos as validações acima, não precisamos repetir
+      console.log('Valor convertido:', amount);
       
       // Limitar a 2 casas decimais para evitar problemas de arredondamento
       amount = parseFloat(amount.toFixed(2));
@@ -4118,16 +4123,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Garantir que o valor tem 2 casas decimais
         amount = parseFloat(amount.toFixed(2));
         
-        // Conforme documentação da Pushin Pay, o valor deve ser enviado como número decimal
-        // Exemplo: R$ 35,00 deve ser enviado como 35 (não em centavos)
+        // IMPORTANTE: A API da Pushin Pay espera valor em centavos (inteiro)
+        // R$ 35,00 deve ser enviado como 3500 (trinta e cinco reais em centavos)
+        const amountInCents = Math.round(amount * 100);
+        
         const requestData = {
-          value: amount, // Enviar o valor como decimal (R$ 35,00 = 35)
+          value: amountInCents, // Enviar o valor em centavos (formato inteiro)
           webhook_url: webhookUrl
         };
         
         console.log(`Valor original do usuário: R$${amount.toFixed(2)}`);
-        console.log(`Valor enviado para API: ${amount}`);
-        console.log(`Formato do valor enviado: ${typeof amount}`);
+        console.log(`Valor convertido para centavos: ${amountInCents}`);
+        console.log(`Formato do valor enviado: ${typeof amountInCents}, valor em centavos: ${amountInCents}`);
         
         console.log("Dados da requisição:", requestData);
         
@@ -4162,10 +4169,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error("Resposta da Pushin Pay não contém os dados do PIX necessários");
         }
         
-        // Extrair os dados relevantes da resposta
+        // Extrair os dados relevantes da resposta conforme documentação
         const qrCodeBase64 = responseData.qr_code_base64;
         const qrCodeText = responseData.qr_code;
         const transactionId = responseData.id || `PUSHIN-${Date.now()}-${transaction.id}`;
+        
+        // Campos adicionais conforme documentação da Pushin Pay
+        const endToEndId = responseData.end_to_end_id || null; // Código identificador do PIX pelo Banco Central
+        const payerName = responseData.payer_name || null; // Nome do pagador (após pagamento)
+        const payerDocument = responseData.payer_national_registration || null; // CPF/CNPJ do pagador (após pagamento)
+        const webhookResponse = responseData.webhook || null; // Retorno interno do processamento
+        const splitRules = responseData.split_rules || null; // Regras de divisão de valores
         
         // Construir a URL do QR Code
         // Verificar se o base64 já inclui o prefixo
@@ -4173,13 +4187,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? qrCodeBase64 
           : `data:image/png;base64,${qrCodeBase64}`;
         
+        // Criar objeto com dados completos para armazenar
+        const completeResponseData = {
+          ...responseData,
+          end_to_end_id: endToEndId,
+          payer_name: payerName,
+          payer_national_registration: payerDocument,
+          webhook: webhookResponse,
+          split_rules: splitRules,
+          created_at: new Date().toISOString()
+        };
+        
         // Atualizar a transação com os dados da Pushin Pay
         const updatedTransaction = await storage.updateTransactionStatus(
           transaction.id,
           "pending",
           transactionId,
           qrCodeUrl || undefined,
-          responseData
+          completeResponseData
         );
         
         // Retornar os dados para o cliente
