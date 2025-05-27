@@ -3508,6 +3508,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🎁 Função para verificar e aplicar bônus de primeiro depósito
+  async function checkAndApplyFirstDepositBonus(userId: number, depositAmount: number) {
+    try {
+      // Verificar se o bônus de primeiro depósito está habilitado
+      const settings = await storage.getSystemSettings();
+      if (!settings?.firstDepositBonusEnabled) {
+        console.log(`[BÔNUS] Bônus de primeiro depósito desabilitado para usuário ${userId}`);
+        return;
+      }
+
+      // Verificar se é realmente o primeiro depósito aprovado do usuário
+      const userTransactions = await storage.getUserTransactions(userId);
+      const completedDeposits = userTransactions.filter(t => 
+        t.type === 'deposit' && 
+        t.status === 'completed'
+      );
+
+      if (completedDeposits.length > 1) {
+        console.log(`[BÔNUS] Usuário ${userId} já possui ${completedDeposits.length} depósitos. Não é primeiro depósito.`);
+        return;
+      }
+
+      // Calcular valor do bônus
+      const bonusPercentage = settings.firstDepositBonusPercentage || 100;
+      const maxBonusAmount = settings.firstDepositBonusMaxAmount || 200;
+      const rollover = settings.firstDepositBonusRollover || 3;
+      const expirationDays = settings.firstDepositBonusExpiration || 7;
+
+      let bonusAmount = (depositAmount * bonusPercentage) / 100;
+      if (bonusAmount > maxBonusAmount) {
+        bonusAmount = maxBonusAmount;
+      }
+
+      if (bonusAmount <= 0) {
+        console.log(`[BÔNUS] Valor de bônus calculado é R$${bonusAmount}. Não aplicando bônus.`);
+        return;
+      }
+
+      // Criar data de expiração
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + expirationDays);
+
+      // Criar registro de bônus no banco
+      const bonusData = {
+        userId: userId,
+        type: 'first_deposit' as const,
+        amount: bonusAmount,
+        remainingAmount: bonusAmount,
+        rolloverAmount: bonusAmount * rollover,
+        rolledAmount: 0,
+        status: 'active' as const,
+        expiresAt: expirationDate,
+        relatedTransactionId: null
+      };
+
+      await storage.createUserBonus(bonusData);
+
+      // Atualizar saldo de bônus do usuário
+      await storage.updateUserBonusBalance(userId, bonusAmount);
+
+      console.log(`🎁 [BÔNUS APLICADO] Usuário ${userId} recebeu R$${bonusAmount.toFixed(2)} de bônus de primeiro depósito (${bonusPercentage}% de R$${depositAmount.toFixed(2)})`);
+      console.log(`📋 [BÔNUS DETALHES] Rollover: R$${(bonusAmount * rollover).toFixed(2)}, Expira em: ${expirationDate.toLocaleDateString()}`);
+
+    } catch (error) {
+      console.error(`[ERRO BÔNUS] Falha ao aplicar bônus de primeiro depósito para usuário ${userId}:`, error);
+    }
+  }
+
   // Verificar automaticamente pagamentos pendentes
   app.post("/api/payment-transactions/check-pending", requireAuth, async (req, res) => {
     try {
@@ -3645,6 +3713,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   // Atualizar saldo do usuário
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
+                  // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
+                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
+                  
                   updatedCount++;
                   results.push({
                     transactionId: transaction.id,
@@ -3743,6 +3814,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   
                   // Atualizar saldo do usuário
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
+                  
+                  // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
+                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
                   
                   updatedCount++;
                   results.push({
