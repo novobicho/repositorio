@@ -3582,7 +3582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let verifiedWithV2 = false;
             
             try {
-              const apiUrlV2 = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
+              const apiUrlV2 = `https://api.pushinpay.com.br/api/transactions/${transaction.externalId}`;
               
               const responseV2 = await fetch(apiUrlV2, {
                 method: 'GET',
@@ -3681,7 +3681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let verifiedWithV1 = false;
             
             try {
-              const apiUrlV1 = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
+              const apiUrlV1 = `https://api.pushinpay.com.br/api/transactions/${transaction.externalId}`;
               
               const responseV1 = await fetch(apiUrlV1, {
                 method: 'GET',
@@ -3934,7 +3934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Construir URL para consulta do status conforme documentação da Pushin Pay
             // Endpoint correto para consulta de PIX: /api/pix/transactions/{ID}
-            const apiUrl = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
+            const apiUrl = `https://api.pushinpay.com.br/api/transactions/${transaction.externalId}`;
             
             console.log(`[VERIFICAÇÃO MANUAL] Usuário ${userId} verificando transação ${transaction.externalId}`);
             
@@ -4082,7 +4082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Construir URL para consulta do status conforme documentação da Pushin Pay
             // Endpoint correto para consulta de PIX: /api/pix/transactions/{ID}
-            const apiUrl = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
+            const apiUrl = `https://api.pushinpay.com.br/api/transactions/${transaction.externalId}`;
             
             console.log(`Verificando status da transação ${transaction.externalId} na API Pushin Pay`);
             
