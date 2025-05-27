@@ -6,7 +6,8 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { MoneyInput } from "./money-input";
-import { NumericKeyboard } from "./numeric-keyboard";
+
+import { BonusDisplay } from "./bonus-display";
 
 import {
   Dialog,
@@ -94,7 +95,7 @@ export function DepositDialog({
   const [open, setOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showKeyboard, setShowKeyboard] = useState(false);
+
   const [transactionStatus, setTransactionStatus] = useState<'idle' | 'success' | 'processing' | 'error'>('idle');
   const [transactionDetail, setTransactionDetail] = useState<any>(null);
   const { toast } = useToast();
@@ -103,9 +104,13 @@ export function DepositDialog({
   const isOpen = controlledOpen !== undefined ? controlledOpen : open;
   const setIsOpen = onOpenChange || setOpen;
   
-  // Reseta o estado quando o diálogo é fechado
+  // Reseta o estado quando o diálogo é fechado/aberto
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      // Limpar cache de bônus quando abrir para garantir dados frescos
+      queryClient.invalidateQueries({ queryKey: ["/api/bonus-settings"] });
+      console.log("Cache limpo por questões de segurança");
+    } else {
       setTransactionStatus('idle');
       setTransactionDetail(null);
     }
@@ -233,14 +238,23 @@ export function DepositDialog({
     enabled: isOpen,
   });
   
-  // Buscar configurações específicas de bônus (via endpoint público)
-  const { data: bonusSettings = {} } = useQuery({
+  // Buscar configurações específicas de bônus (endpoint público para usuários)
+  const { data: bonusSettings = {}, isLoading: bonusLoading } = useQuery({
     queryKey: ["/api/bonus-settings"],
     queryFn: async () => {
+      console.log("=== FAZENDO CHAMADA PARA /api/bonus-settings ===");
       const res = await apiRequest("GET", "/api/bonus-settings");
-      return await res.json();
+      const data = await res.json();
+      console.log("=== DADOS RECEBIDOS DA API DE BÔNUS ===", data);
+      console.log("Primeiro depósito - Porcentagem:", data?.firstDepositBonus?.percentage);
+      console.log("Primeiro depósito - Valor máximo:", data?.firstDepositBonus?.maxAmount);
+      console.log("Primeiro depósito - Habilitado:", data?.firstDepositBonus?.enabled);
+      return data;
     },
     enabled: isOpen,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false
   });
   
   // Console para debug das configurações de bônus
@@ -270,6 +284,10 @@ export function DepositDialog({
     percentage: bonusSettings?.firstDepositBonus?.percentage,
     maxAmount: bonusSettings?.firstDepositBonus?.maxAmount
   });
+
+  // Extrair valores do banco de dados para usar no diálogo
+  const bonusPercentage = bonusSettings?.firstDepositBonus?.percentage || 100;
+  const bonusMaxAmount = bonusSettings?.firstDepositBonus?.maxAmount || 200;
   
   // Função para calcular o valor do bônus com base no valor do depósito
   const calculateBonusAmount = (depositAmount: number) => {
@@ -291,14 +309,24 @@ export function DepositDialog({
     // Se o bônus não está habilitado, retornar zero
     if (!bonusEnabled) return 0;
     
-    // Buscar valores das configurações (admin tem prioridade sobre sistema)
-    const percentage = adminPercentage || 
-      (systemSettings?.firstDepositBonusPercentage ? parseFloat(systemSettings.firstDepositBonusPercentage.toString()) : null) ||
-      DEFAULT_PERCENTAGE;
-      
-    const maxAmount = adminMaxAmount || 
-      (systemSettings?.firstDepositBonusMaxAmount ? parseFloat(systemSettings.firstDepositBonusMaxAmount.toString()) : null) ||
-      DEFAULT_MAX_AMOUNT;
+    // Usar SOMENTE valores do admin panel, ignorando sistema e defaults
+    const percentage = adminPercentage || DEFAULT_PERCENTAGE;
+    const maxAmount = adminMaxAmount || DEFAULT_MAX_AMOUNT;
+    
+    console.log("DEBUG BÔNUS - Valores recebidos:", {
+      adminPercentage,
+      adminMaxAmount,
+      adminEnabled,
+      systemEnabled,
+      systemPercentage: systemSettings?.firstDepositBonusPercentage,
+      systemMaxAmount: systemSettings?.firstDepositBonusMaxAmount,
+      bonusSettings: bonusSettings?.firstDepositBonus,
+      systemSettings: {
+        firstDepositBonusEnabled: systemSettings?.firstDepositBonusEnabled,
+        firstDepositBonusPercentage: systemSettings?.firstDepositBonusPercentage,
+        firstDepositBonusMaxAmount: systemSettings?.firstDepositBonusMaxAmount
+      }
+    });
     
     console.log("Calculando bônus com valores finais:", { 
       depositAmount, 
@@ -488,45 +516,7 @@ export function DepositDialog({
     });
   };
 
-  // Handler para entrada numérica do teclado
-  const handleKeyPress = (value: string) => {
-    if (value === "C") {
-      setDepositAmount("");
-      form.setValue("amount", 0);
-      setCurrentDepositValue(0);
-      return;
-    }
 
-    if (value === "←") {
-      const newValue = depositAmount.slice(0, -1);
-      setDepositAmount(newValue);
-      const parsedAmount = parseMoneyValue(newValue);
-      form.setValue("amount", parsedAmount);
-      setCurrentDepositValue(parsedAmount);
-      return;
-    }
-
-    // Permitir apenas um ponto decimal
-    if (value === "," && depositAmount.includes(",")) {
-      return;
-    }
-
-    // Limitar a 2 casas decimais após a vírgula
-    if (depositAmount.includes(",")) {
-      const parts = depositAmount.split(",");
-      if (parts[1] && parts[1].length >= 2) {
-        return;
-      }
-    }
-
-    const newValue = depositAmount + value;
-    setDepositAmount(newValue);
-    const parsedAmount = parseMoneyValue(newValue);
-    form.setValue("amount", parsedAmount);
-    
-    // Atualizar o valor de depósito no estado para recalcular o bônus
-    setCurrentDepositValue(parsedAmount);
-  };
 
   // Converter string de valor para número (considerando formato brasileiro)
   const parseMoneyValue = (value: string): number => {
@@ -866,7 +856,6 @@ export function DepositDialog({
                       field.onChange(parsedValue);
                       setCurrentDepositValue(parsedValue);
                     }}
-                    onFocus={() => setShowKeyboard(true)}
                     placeholder="R$ 0,00"
                     className="text-2xl font-bold text-center"
                   />
@@ -897,13 +886,7 @@ export function DepositDialog({
             )}
           />
 
-          {showKeyboard && (
-            <Card className="mb-4">
-              <CardContent className="p-2">
-                <NumericKeyboard onKeyPress={handleKeyPress} showDecimal />
-              </CardContent>
-            </Card>
-          )}
+
 
           <FormField
             control={form.control}
@@ -939,43 +922,73 @@ export function DepositDialog({
             )}
           />
           
-          {/* Opção de bônus de primeiro depósito - só aparece se for elegível */}
+          {/* Seção de bônus atualizada com valores corretos */}
+          {isFirstDeposit && bonusSettings?.firstDepositBonus?.enabled && (
+            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">🎁</span>
+                </div>
+                <h3 className="font-bold text-lg text-gray-800">Bônus de Primeiro Depósito</h3>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg p-3 text-center border border-yellow-200">
+                  <div className="text-2xl font-bold text-yellow-600">{bonusPercentage}%</div>
+                  <div className="text-xs text-gray-600">de bônus</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center border border-green-200">
+                  <div className="text-lg font-bold text-green-600">R$ {bonusMaxAmount.toFixed(2)}</div>
+                  <div className="text-xs text-gray-600">máximo</div>
+                </div>
+              </div>
+
+              {currentDepositValue > 0 && (
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm font-medium">Seu bônus será:</span>
+                    <span className="text-xl font-bold text-green-600">
+                      +R$ {Math.min((currentDepositValue * bonusPercentage) / 100, bonusMaxAmount).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    Depósito: R$ {currentDepositValue.toFixed(2)} × {bonusPercentage}% = R$ {Math.min((currentDepositValue * bonusPercentage) / 100, bonusMaxAmount).toFixed(2)}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">💰 Saldo total:</span>
+                  <span className="text-lg font-bold text-purple-600">
+                    R$ {(currentDepositValue + Math.min((currentDepositValue * bonusPercentage) / 100, bonusMaxAmount)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-500 space-y-1">
+                <div>• Rollover de 2x necessário para saque</div>
+                <div>• Válido por 14 dias após ativação</div>
+              </div>
+            </div>
+          )}
+          
+          {/* Checkbox para ativar bônus (separado do display) */}
           {bonusEnabled && (
             <FormField
               control={form.control}
               name="useBonus"
               render={({ field }) => (
-                <FormItem className="flex flex-col space-y-2 rounded-md border p-4 mt-4">
-                  <div className="flex items-center space-x-2">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-medium text-base">
-                      Ativar Bônus de Primeiro Depósito
-                    </FormLabel>
-                  </div>
-                  
-                  <FormDescription className="pl-6">
-                    Receba <span className="font-bold text-primary">98%</span> de bônus até{" "}
-                    <span className="font-bold text-primary">R$ 300,00</span>
-                  </FormDescription>
-                  
-                  {/* Valor calculado do bônus em destaque */}
-                  <div className="mt-1 pl-6">
-                    <div className="font-medium">
-                      Receba{" "}
-                      <span className="text-primary font-bold">
-                        R$ {currentBonusAmount.toFixed(2).replace(".", ",")}
-                      </span>{" "}
-                      de bônus
-                    </div>
-                    <div className="text-xs text-amber-500 mt-1">
-                      Rollover de <span className="font-semibold">2x</span> necessário para saque.
-                    </div>
-                  </div>
+                <FormItem className="flex items-center space-x-2 mt-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="font-medium text-base">
+                    Ativar Bônus de Primeiro Depósito
+                  </FormLabel>
                 </FormItem>
               )}
             />
