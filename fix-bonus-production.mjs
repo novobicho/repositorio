@@ -81,28 +81,44 @@ async function fixBonusSystem() {
       `);
     }
 
-    // 3. Criar tabela user_bonuses se não existir
-    console.log('🏗️ Criando tabela user_bonuses...');
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS user_bonuses (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        bonus_type VARCHAR(50) NOT NULL,
-        amount NUMERIC(15,2) NOT NULL,
-        rollover_requirement NUMERIC(15,2) NOT NULL DEFAULT 0,
-        rollover_progress NUMERIC(15,2) NOT NULL DEFAULT 0,
-        status VARCHAR(20) NOT NULL DEFAULT 'active',
-        expires_at TIMESTAMP,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    // 3. Verificar se a tabela user_bonuses existe e criar se necessário
+    console.log('🏗️ Verificando tabela user_bonuses...');
+    
+    // Primeiro verificar se a tabela existe
+    const tableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'user_bonuses'
       )
     `);
+    
+    if (!tableExists.rows[0].exists) {
+      console.log('➕ Criando tabela user_bonuses...');
+      await pool.query(`
+        CREATE TABLE user_bonuses (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          type VARCHAR(50) NOT NULL,
+          amount NUMERIC(15,2) NOT NULL,
+          rollover_requirement NUMERIC(15,2) NOT NULL DEFAULT 0,
+          rollover_progress NUMERIC(15,2) NOT NULL DEFAULT 0,
+          status VARCHAR(20) NOT NULL DEFAULT 'active',
+          expires_at TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+    } else {
+      console.log('✅ Tabela user_bonuses já existe');
+    }
 
-    // 4. Criar índices
-    console.log('📊 Criando índices...');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_bonuses_user_id ON user_bonuses(user_id)');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_bonuses_status ON user_bonuses(status)');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_bonuses_type ON user_bonuses(bonus_type)');
+    // 4. Criar índices se a tabela existe
+    if (tableExists.rows[0].exists || !tableExists.rows[0].exists) {
+      console.log('📊 Criando índices...');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_user_bonuses_user_id ON user_bonuses(user_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_user_bonuses_status ON user_bonuses(status)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_user_bonuses_type ON user_bonuses(type)');
+    }
 
     // 5. Verificar configurações finais
     console.log('✅ Verificando configurações finais...');
