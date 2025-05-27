@@ -412,6 +412,42 @@ export function DepositDialog({
     }
   });
 
+  // Mutação para verificar pagamento manualmente
+  const checkPaymentMutation = useMutation({
+    mutationFn: async (transactionId: number) => {
+      const res = await apiRequest("POST", `/api/payment-transactions/${transactionId}/check`);
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      if (data.credited) {
+        toast({
+          title: "Pagamento confirmado!",
+          description: data.message,
+          variant: "default"
+        });
+        
+        // Invalidar cache do usuário para atualizar saldo
+        queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+        
+        // Fechar o diálogo
+        setIsOpen(false);
+      } else {
+        toast({
+          title: "Verificação concluída",
+          description: data.message,
+          variant: data.apiError ? "destructive" : "default"
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro na verificação",
+        description: error.message || "Erro ao verificar o pagamento",
+        variant: "destructive"
+      });
+    }
+  });
+
   // Handler para o envio do formulário
   const onSubmit = (values: DepositFormValues) => {
     setIsSubmitting(true);
@@ -630,7 +666,33 @@ export function DepositDialog({
                 </TabsContent>
               </Tabs>
               
-              <div className="mt-6 grid grid-cols-2 gap-2 text-sm">
+              {/* Botão "Já fiz o pagamento" */}
+              <div className="mt-6 flex justify-center">
+                <Button
+                  onClick={() => {
+                    if (currentTransaction?.id) {
+                      checkPaymentMutation.mutate(currentTransaction.id);
+                    }
+                  }}
+                  disabled={checkPaymentMutation.isPending || !currentTransaction?.id}
+                  variant="default"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {checkPaymentMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Verificando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Já fiz o pagamento
+                    </>
+                  )}
+                </Button>
+              </div>
+              
+              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
                 <div className="text-muted-foreground">Valor:</div>
                 <div className="text-right font-medium">
                   {new Intl.NumberFormat('pt-BR', { 
