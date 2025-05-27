@@ -273,23 +273,32 @@ export function DepositDialog({
   
   // Função para calcular o valor do bônus com base no valor do depósito
   const calculateBonusAmount = (depositAmount: number) => {
-    // Valores padrão de bônus para usar como fallback
-    const DEFAULT_PERCENTAGE = 98; // 98% (novo valor)
-    const DEFAULT_MAX_AMOUNT = 300; // R$ 300,00
+    // Buscar valores das configurações do admin (prioridade) ou sistema
+    const adminPercentage = bonusSettings?.firstDepositBonus?.percentage ? 
+      parseFloat(bonusSettings.firstDepositBonus.percentage) : null;
+    const adminMaxAmount = bonusSettings?.firstDepositBonus?.maxAmount ? 
+      parseFloat(bonusSettings.firstDepositBonus.maxAmount) : null;
     
-    // Verificar se o primeiro depósito está habilitado nas configurações do sistema
-    const bonusEnabled = systemSettings?.firstDepositBonusEnabled !== false;
+    // Valores padrão apenas se não houver configuração
+    const DEFAULT_PERCENTAGE = 100; // 100% como padrão
+    const DEFAULT_MAX_AMOUNT = 200; // R$ 200,00 como padrão
+    
+    // Verificar se o primeiro depósito está habilitado
+    const adminEnabled = bonusSettings?.firstDepositBonus?.enabled;
+    const systemEnabled = systemSettings?.firstDepositBonusEnabled;
+    const bonusEnabled = adminEnabled || systemEnabled;
     
     // Se o bônus não está habilitado, retornar zero
     if (!bonusEnabled) return 0;
     
-    // Forçar o valor de 98% para exibição até a correção no banco
-    // Isso é um workaround temporário até que o valor seja atualizado
-    // Anteriormente: Primeiro tentar obter valores das configurações de bônus do admin, etc.
-    const percentage = 98; // Fixado temporariamente em 98%
-    
-    // Manter valor máximo do bônus de R$300
-    const maxAmount = DEFAULT_MAX_AMOUNT;
+    // Buscar valores das configurações (admin tem prioridade sobre sistema)
+    const percentage = adminPercentage || 
+      (systemSettings?.firstDepositBonusPercentage ? parseFloat(systemSettings.firstDepositBonusPercentage.toString()) : null) ||
+      DEFAULT_PERCENTAGE;
+      
+    const maxAmount = adminMaxAmount || 
+      (systemSettings?.firstDepositBonusMaxAmount ? parseFloat(systemSettings.firstDepositBonusMaxAmount.toString()) : null) ||
+      DEFAULT_MAX_AMOUNT;
     
     console.log("Calculando bônus com valores finais:", { 
       depositAmount, 
