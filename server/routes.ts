@@ -3883,6 +3883,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Verificar pagamento próprio do usuário (botão "Já fiz o pagamento")
+  app.post("/api/payment-transactions/:id/check", requireAuth, async (req, res) => {
+    try {
+      const transactionId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      if (isNaN(transactionId)) {
+        return res.status(400).json({ message: "ID de transação inválido" });
+      }
+      
+      // Buscar a transação
+      const transaction = await storage.getPaymentTransaction(transactionId);
+      
+      if (!transaction) {
+        return res.status(404).json({ message: "Transação não encontrada" });
+      }
+      
+      // Verificar se a transação pertence ao usuário autenticado
+      if (transaction.userId !== userId) {
+        return res.status(403).json({ message: "Acesso negado: esta transação não pertence a você" });
+      }
+      
+      // Se a transação já estiver concluída, apenas retornar
+      if (transaction.status === 'completed') {
+        return res.json({ 
+          message: "Transação já foi confirmada e creditada",
+          status: transaction.status,
+          transaction 
+        });
+      }
+      
+      // Apenas processar transações pendentes ou em processamento
+      if (transaction.status === 'pending' || transaction.status === 'processing') {
+        // Obter gateway de pagamento
+        const gateway = await storage.getPaymentGateway(transaction.gatewayId);
+        
+        if (!gateway) {
+          return res.status(404).json({ message: "Gateway de pagamento não encontrado" });
+        }
+        
+        // Se for Pushin Pay, tentar verificar com a API
+        if (gateway.type === 'pushinpay' && transaction.externalId) {
+          try {
+            // Obter token do gateway
+            const token = process.env.PUSHIN_PAY_TOKEN;
+            if (!token) {
+              return res.status(400).json({ message: "Token da API não configurado" });
+            }
+            
+            // Construir URL para consulta do status conforme documentação da Pushin Pay
+            // Endpoint correto para consulta de PIX: /api/pix/transactions/{ID}
+            const apiUrl = `https://api.pushinpay.com.br/api/pix/transactions/${transaction.externalId}`;
+            
+            console.log(`[VERIFICAÇÃO MANUAL] Usuário ${userId} verificando transação ${transaction.externalId}`);
+            
+            // Fazer requisição para a API da Pushin Pay
+            const response = await fetch(apiUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+              }
+            });
+            
+            // Verificar resposta
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              console.error("Erro na resposta da Pushin Pay:", response.status, errorData);
+              
+              return res.status(200).json({
+                message: "Não foi possível verificar com a API no momento. Tente novamente em alguns minutos.",
+                status: transaction.status,
+                transaction,
+                apiError: true
+              });
+            }
+            
+            // Processar resposta
+            const paymentData = await response.json();
+            console.log(`[VERIFICAÇÃO MANUAL] Resposta da Pushin Pay:`, paymentData);
+            
+            // Verificar se o pagamento foi concluído
+            if (paymentData.status === 'paid' || 
+                paymentData.status === 'completed' || 
+                paymentData.status === 'approved') {
+              
+              // Atualizar status da transação
+              await storage.updateTransactionStatus(
+                transaction.id,
+                "completed",
+                transaction.externalId,
+                transaction.externalUrl || undefined,
+                paymentData
+              );
+              
+              // Atualizar saldo do usuário
+              await storage.updateUserBalance(transaction.userId, transaction.amount);
+              
+              console.log(`[VERIFICAÇÃO MANUAL] Pagamento confirmado para usuário ${userId}, valor R$${transaction.amount}`);
+              
+              // Cache será invalidado no frontend
+              
+              return res.json({
+                message: "Pagamento confirmado! Seu saldo foi atualizado.",
+                status: "completed",
+                transaction: {
+                  ...transaction,
+                  status: "completed"
+                },
+                credited: true
+              });
+              
+            } else {
+              // Pagamento ainda não foi processado
+              return res.json({
+                message: "Pagamento ainda não foi processado. Aguarde alguns minutos e tente novamente.",
+                status: transaction.status,
+                transaction,
+                apiStatus: paymentData.status
+              });
+            }
+            
+          } catch (apiError: any) {
+            console.error("Erro ao verificar pagamento na API:", apiError);
+            return res.status(200).json({ 
+              message: "Erro temporário ao verificar com a API. Tente novamente em alguns minutos.",
+              status: transaction.status,
+              transaction,
+              apiError: true
+            });
+          }
+        } else {
+          // Para outros gateways ou sem ID externo
+          return res.json({
+            message: "Verificação automática não disponível para este método de pagamento",
+            status: transaction.status,
+            transaction
+          });
+        }
+      }
+      
+      // Se não for pendente ou em processamento, retornar o status atual
+      return res.json({
+        message: `Transação está atualmente ${transaction.status}`,
+        status: transaction.status,
+        transaction
+      });
+      
+    } catch (error) {
+      console.error("Erro ao verificar transação de pagamento:", error);
+      res.status(500).json({ message: "Erro ao verificar transação de pagamento" });
+    }
+  });
+
   // Verificar um pagamento (apenas para administradores)
   app.post("/api/payment-transactions/:id/verify", requireAuth, requireAdmin, async (req, res) => {
     try {
