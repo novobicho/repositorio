@@ -420,17 +420,22 @@ export function DepositDialog({
     },
     onSuccess: (data) => {
       if (data.credited) {
+        // Pop-up de sucesso mais visível
         toast({
-          title: "Pagamento confirmado!",
-          description: data.message,
-          variant: "default"
+          title: "🎉 Depósito Confirmado!",
+          description: `${data.message} Seu saldo foi atualizado com sucesso!`,
+          variant: "default",
+          duration: 8000, // 8 segundos para dar tempo de ler
         });
         
         // Invalidar cache do usuário para atualizar saldo
         queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/payment-transactions'] });
         
-        // Fechar o diálogo
-        setIsOpen(false);
+        // Fechar o diálogo após um pequeno delay para mostrar o sucesso
+        setTimeout(() => {
+          setIsOpen(false);
+        }, 1000);
       } else {
         toast({
           title: "Verificação concluída",
