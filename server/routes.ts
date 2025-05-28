@@ -727,91 +727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Rotas para gerenciamento de bônus (admin)
   
-  // Rota para obter todas as configurações de bônus do sistema
-  app.get('/api/admin/bonus-settings', requireAdmin, async (req, res) => {
-    try {
-      // Primeiro tentar obter as configurações através do PostgreSQL diretamente para garantir dados consistentes
-      console.log('Obtendo configurações de bônus do sistema...');
-      
-      const result = await pool.query(`
-        SELECT 
-          signup_bonus_enabled,
-          signup_bonus_amount,
-          signup_bonus_rollover,
-          signup_bonus_expiration,
-          first_deposit_bonus_enabled,
-          first_deposit_bonus_amount,
-          first_deposit_bonus_percentage,
-          first_deposit_bonus_max_amount,
-          first_deposit_bonus_rollover,
-          first_deposit_bonus_expiration,
-          promotional_banners_enabled
-        FROM system_settings
-        WHERE id = (SELECT MAX(id) FROM system_settings)
-      `);
-      
-      // Se não encontrar registros, tentar obter via API de armazenamento
-      let settings;
-      
-      if (result.rows.length > 0) {
-        console.log('Configurações de bônus obtidas diretamente do banco de dados.');
-        settings = result.rows[0];
-      } else {
-        console.log('Tentando obter configurações via storage.getSystemSettings()...');
-        settings = await storage.getSystemSettings();
-      }
-      
-      // Configurações padrão no caso de não encontrar ou valores nulos
-      const defaultConfig = {
-        signupBonus: {
-          enabled: false,
-          amount: 10,
-          rollover: 3,
-          expiration: 7
-        },
-        firstDepositBonus: {
-          enabled: false,
-          amount: 100,
-          percentage: 100,
-          maxAmount: 200,
-          rollover: 3,
-          expiration: 7
-        },
-        promotionalBanners: {
-          enabled: false
-        }
-      };
-      
-      const response = {
-        signupBonus: {
-          enabled: settings?.signup_bonus_enabled ?? false,
-          amount: Number(settings?.signup_bonus_amount ?? defaultConfig.signupBonus.amount),
-          rollover: Number(settings?.signup_bonus_rollover ?? defaultConfig.signupBonus.rollover),
-          expiration: Number(settings?.signup_bonus_expiration ?? defaultConfig.signupBonus.expiration)
-        },
-        firstDepositBonus: {
-          enabled: settings?.first_deposit_bonus_enabled ?? false,
-          amount: Number(settings?.first_deposit_bonus_amount ?? defaultConfig.firstDepositBonus.amount),
-          percentage: Number(settings?.first_deposit_bonus_percentage ?? defaultConfig.firstDepositBonus.percentage),
-          maxAmount: Number(settings?.first_deposit_bonus_max_amount ?? defaultConfig.firstDepositBonus.maxAmount),
-          rollover: Number(settings?.first_deposit_bonus_rollover ?? defaultConfig.firstDepositBonus.rollover),
-          expiration: Number(settings?.first_deposit_bonus_expiration ?? defaultConfig.firstDepositBonus.expiration)
-        },
-        promotionalBanners: {
-          enabled: settings?.promotional_banners_enabled ?? false
-        }
-      };
-      
-      console.log('Enviando resposta de configurações de bônus:', JSON.stringify(response));
-      res.json(response);
-    } catch (error) {
-      console.error("Erro ao buscar configurações de bônus:", error);
-      res.status(500).json({ 
-        message: "Erro ao buscar configurações de bônus",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
+
   
   // Rota para atualizar as configurações de bônus
   app.post('/api/admin/bonus-settings', requireAdmin, async (req, res) => {
@@ -5158,7 +5074,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * API pública para obter as configurações de bônus atuais
    * Disponível para usuários logados e não logados
-   * Usa a mesma lógica do endpoint admin para garantir sincronização
+   * Usa EXATAMENTE a mesma lógica do endpoint admin para garantir sincronização
    */
   app.get("/api/bonus-settings", async (req, res) => {
     try {
@@ -5206,7 +5122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rollover: Number(settings?.firstDepositBonusRollover ?? defaultConfig.firstDepositBonus.rollover),
           expiration: Number(settings?.firstDepositBonusExpiration ?? defaultConfig.firstDepositBonus.expiration)
         },
-        promotionalBanuses: {
+        promotionalBanners: {
           enabled: settings?.promotionalBannersEnabled ?? false
         }
       };
