@@ -5271,99 +5271,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Transação de teste criada: ${transaction.id} para usuário ${userId}`);
       
-      // Simular o webhook de confirmação
-      if (systemSettings.firstDepositBonusEnabled) {
-        // Verificar se o usuário ainda não recebeu bônus de primeiro depósito
-        const hasBonus = await storage.hasUserReceivedFirstDepositBonus(userId);
-        
-        if (!hasBonus) {
-          console.log(`Aplicando bônus de primeiro depósito para usuário ${userId}`);
-          
-          // Calcular o valor do bônus
-          let bonusAmount = 0;
-          
-          if (systemSettings.firstDepositBonusPercentage > 0) {
-            // Bônus percentual sobre o valor do depósito
-            bonusAmount = (amount * systemSettings.firstDepositBonusPercentage) / 100;
-            
-            // Limitar ao valor máximo de bônus, se configurado
-            if (systemSettings.firstDepositBonusMaxAmount > 0 && bonusAmount > systemSettings.firstDepositBonusMaxAmount) {
-              bonusAmount = systemSettings.firstDepositBonusMaxAmount;
-            }
-          } else {
-            // Valor fixo de bônus
-            bonusAmount = systemSettings.firstDepositBonusAmount;
-          }
-          
-          // Arredondar para 2 casas decimais
-          bonusAmount = parseFloat(bonusAmount.toFixed(2));
-          
-          if (bonusAmount > 0) {
-            // Calcular o rollover e a data de expiração
-            const rolloverAmount = bonusAmount * systemSettings.firstDepositBonusRollover;
-            const expirationDays = systemSettings.firstDepositBonusExpiration || 7;
-            
-            // Configurar data de expiração
-            const expirationDate = new Date();
-            expirationDate.setDate(expirationDate.getDate() + expirationDays);
-            
-            // Criar o bônus
-            const bonus = await storage.createUserBonus({
-              userId,
-              type: "first_deposit",
-              amount: bonusAmount,
-              remainingAmount: bonusAmount,
-              rolloverAmount,
-              status: "active",
-              expiresAt: expirationDate,
-              relatedTransactionId: transaction.id
-            });
-            
-            console.log(`Bônus de primeiro depósito criado: R$${bonusAmount.toFixed(2)}, Rollover: R$${rolloverAmount.toFixed(2)}`);
-            
-            // Adicionar o bônus ao saldo de bônus do usuário
-            // Isso garante que o usuário possa usar o bônus imediatamente
-            console.log(`Atualizando saldo de bônus para o usuário ${userId} com +${bonusAmount}`);
-            
-            // Criar uma transação para registrar o bônus recebido
-            await storage.createTransaction({
-              userId,
-              type: "deposit", // Usando "deposit" em vez de "bonus" para compatibilidade
-              amount: bonusAmount,
-              description: "Bônus de primeiro depósito"
-            });
-            
-            // Atualizar diretamente o saldo de BÔNUS do usuário (não o saldo principal)
-            await storage.updateUserBonusBalance(userId, bonusAmount);
-            console.log(`Saldo de BÔNUS do usuário atualizado com R$${bonusAmount.toFixed(2)}`);
-            
-            // Atualizar status da transação para completed
-            const updatedTransaction = await storage.updateTransactionStatus(
-              transaction.id,
-              "completed",
-              transaction.externalId,
-              transaction.externalUrl,
-              { test: true }
-            );
-            
-            // Adicionar o valor do depósito ao saldo do usuário
-            const updatedUser = await storage.updateUserBalance(userId, amount);
-            
-            res.json({
-              message: "Bônus de primeiro depósito aplicado com sucesso",
-              transaction: updatedTransaction,
-              bonus,
-              user: updatedUser
-            });
-          } else {
-            res.status(400).json({ message: "O valor do bônus é zero. Verifique as configurações." });
-          }
-        } else {
-          res.status(400).json({ message: "Usuário já recebeu bônus de primeiro depósito" });
-        }
-      } else {
-        res.status(400).json({ message: "Bônus de primeiro depósito não está ativado nas configurações" });
-      }
+      // Atualizar status da transação para completed (o bônus será processado automaticamente pelo webhook)
+      const updatedTransaction = await storage.updateTransactionStatus(
+        transaction.id,
+        "completed",
+        transaction.externalId,
+        transaction.externalUrl,
+        { test: true }
+      );
+      
+      // Adicionar o valor do depósito ao saldo do usuário
+      const updatedUser = await storage.updateUserBalance(userId, amount);
+      
+      res.json({
+        message: "Depósito de teste processado com sucesso",
+        transaction: updatedTransaction,
+        user: updatedUser,
+        note: "O bônus será aplicado automaticamente se configurado"
+      });
     } catch (error) {
       console.error("Erro ao testar bônus de primeiro depósito:", error);
       res.status(500).json({ message: "Erro ao testar bônus de primeiro depósito" });
