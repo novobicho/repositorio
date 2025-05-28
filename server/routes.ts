@@ -4610,30 +4610,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     
                     console.log(`[BÔNUS] Transação registrada com ID ${bonusTransaction.id}`);
                     
-                    // *** ETAPA CRÍTICA: Atualizar o saldo de bônus do usuário ***
-                    console.log(`[BÔNUS] ETAPA CRÍTICA: Chamando updateUserBonusBalance para atualizar saldo de usuário ${userId} com +${bonusAmount}`);
+                    // *** BÔNUS CRIADO COM SUCESSO ***
+                    console.log(`[BÔNUS] ✅ SUCESSO: Bônus de primeiro depósito criado com sucesso!`);
+                    console.log(`[BÔNUS] Valor: R$${bonusAmount.toFixed(2)}, Rollover: R$${rolloverAmount.toFixed(2)}`);
                     
-                    // Verificar saldo antes da atualização
-                    const bonusBalanceBefore = await storage.getUserBonusBalance(userId);
-                    console.log(`[BÔNUS] Saldo de bônus ANTES da atualização: R$${bonusBalanceBefore}`);
+                    // Verificar o saldo de bônus atual do usuário
+                    const currentBonusBalance = await storage.getUserBonusBalance(userId);
+                    console.log(`[BÔNUS] Saldo total de bônus do usuário: R$${currentBonusBalance.toFixed(2)}`);
                     
-                    // Atualizar saldo de bônus
-                    await storage.updateUserBonusBalance(userId, bonusAmount);
-                    
-                    // Verificar se o saldo foi atualizado corretamente com várias verificações
-                    const updatedBonus = await storage.getUserBonusBalance(userId);
-                    console.log(`[BÔNUS] Saldo de BÔNUS do usuário APÓS atualização: R$${updatedBonus}`);
-                    
-                    // Verificação adicional: consultar todos os bônus do usuário
+                    // Verificar todos os bônus do usuário
                     const allUserBonuses = await storage.getUserBonuses(userId);
-                    console.log(`[BÔNUS] Verificação adicional: Usuário ${userId} tem ${allUserBonuses.length} bônus no total`);
-                    
-                    const expectedBalance = bonusBalanceBefore + bonusAmount;
-                    if (Math.abs(updatedBonus - expectedBalance) < 0.01) { // Tolerância para arredondamento
-                      console.log(`[BÔNUS] ✅ SUCESSO: Bônus aplicado corretamente. Saldo anterior: R$${bonusBalanceBefore}, Adicionado: R$${bonusAmount}, Novo saldo: R$${updatedBonus}`);
-                    } else {
-                      console.error(`[BÔNUS] ❌ ERRO: Bônus não foi aplicado corretamente ao saldo. Esperado: R$${expectedBalance}, Atual: R$${updatedBonus}`);
-                    }
+                    console.log(`[BÔNUS] Usuário ${userId} tem ${allUserBonuses.length} bônus ativo(s)`)
                   } catch (error) {
                     console.error(`[BÔNUS] ERRO ao processar bônus: ${error.message}`);
                     console.error(error.stack);
@@ -5388,8 +5375,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             // Atualizar diretamente o saldo de BÔNUS do usuário (não o saldo principal)
-            await storage.updateUserBonusBalance(userId, bonusAmount);
-            console.log(`Saldo de BÔNUS do usuário atualizado com R$${bonusAmount.toFixed(2)}`);
+            // Bônus criado com sucesso na tabela user_bonuses
+            console.log(`✅ Bônus de primeiro depósito criado: R$${bonusAmount.toFixed(2)}`);
             
             // Atualizar status da transação para completed
             const updatedTransaction = await storage.updateTransactionStatus(
