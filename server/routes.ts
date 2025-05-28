@@ -3539,8 +3539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.createUserBonus(bonusData);
 
-      // Atualizar saldo de bônus do usuário
-      await storage.updateUserBonusBalance(userId, bonusAmount);
+      // Saldo de bônus já é atualizado automaticamente pelo createUserBonus
 
       console.log(`🎁 [BÔNUS APLICADO] Usuário ${userId} recebeu R$${bonusAmount.toFixed(2)} de bônus de primeiro depósito (${bonusPercentage}% de R$${depositAmount.toFixed(2)})`);
       console.log(`📋 [BÔNUS DETALHES] Rollover: R$${(bonusAmount * rollover).toFixed(2)}, Expira em: ${expirationDate.toLocaleDateString()}`);
@@ -3687,7 +3686,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   // Atualizar saldo do usuário
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
-                  // Bônus será aplicado pela segunda chamada
+                  // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
+                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
                   
                   updatedCount++;
                   results.push({
@@ -3788,8 +3788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   // Atualizar saldo do usuário
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
-                  // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
-                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
+                  // Bônus aplicado apenas pela primeira chamada
                   
                   updatedCount++;
                   results.push({
