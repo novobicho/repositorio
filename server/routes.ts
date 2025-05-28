@@ -2675,36 +2675,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Erro ao verificar/atualizar schema:', schemaError);
       }
       
-      // Check if settings exist in database, otherwise return defaults
-      const settings = await storage.getSystemSettings();
+      // Obter dados DIRETAMENTE do banco para o painel admin
+      const { rows } = await pool.query('SELECT * FROM system_settings LIMIT 1');
       
-      if (settings) {
-        // Obter dados diretamente do banco para garantir que temos os novos campos de bônus
-        const { rows } = await pool.query('SELECT * FROM system_settings WHERE id = 1');
-        if (rows.length > 0) {
-          const dbSettings = rows[0];
-          
-          // Adicionar os novos campos se existirem no banco
-          if (dbSettings.site_name) settings.siteName = dbSettings.site_name;
-          if (dbSettings.site_description) settings.siteDescription = dbSettings.site_description;
-          if (dbSettings.logo_url) settings.logoUrl = dbSettings.logo_url;
-          if (dbSettings.favicon_url) settings.faviconUrl = dbSettings.favicon_url;
-          
-          // IMPORTANTE: Adicionar todos os campos de bônus do banco de dados
-          settings.signupBonusEnabled = dbSettings.signup_bonus_enabled ?? false;
-          settings.signupBonusAmount = Number(dbSettings.signup_bonus_amount ?? 10);
-          settings.signupBonusRollover = Number(dbSettings.signup_bonus_rollover ?? 3);
-          settings.signupBonusExpiration = Number(dbSettings.signup_bonus_expiration ?? 7);
-          settings.firstDepositBonusEnabled = dbSettings.first_deposit_bonus_enabled ?? false;
-          settings.firstDepositBonusAmount = Number(dbSettings.first_deposit_bonus_amount ?? 100);
-          settings.firstDepositBonusPercentage = Number(dbSettings.first_deposit_bonus_percentage ?? 100);
-          settings.firstDepositBonusMaxAmount = Number(dbSettings.first_deposit_bonus_max_amount ?? 200);
-          settings.firstDepositBonusRollover = Number(dbSettings.first_deposit_bonus_rollover ?? 3);
-          settings.firstDepositBonusExpiration = Number(dbSettings.first_deposit_bonus_expiration ?? 7);
-          settings.promotionalBannersEnabled = dbSettings.promotional_banners_enabled ?? false;
-        }
+      if (rows.length > 0) {
+        const dbSettings = rows[0];
         
-        res.json(settings);
+        console.log('=== DADOS DO BANCO PARA ADMIN ===');
+        console.log('signup_bonus_enabled:', dbSettings.signup_bonus_enabled);
+        console.log('first_deposit_bonus_enabled:', dbSettings.first_deposit_bonus_enabled);
+        console.log('===================================');
+        
+        const adminSettings = {
+          // Configurações básicas
+          maxBetAmount: Number(dbSettings.max_bet_amount),
+          maxPayout: Number(dbSettings.max_payout),
+          minBetAmount: Number(dbSettings.min_bet_amount || 0.5),
+          defaultBetAmount: Number(dbSettings.default_bet_amount || 2),
+          mainColor: dbSettings.main_color,
+          secondaryColor: dbSettings.secondary_color,
+          accentColor: dbSettings.accent_color,
+          allowUserRegistration: Boolean(dbSettings.allow_user_registration),
+          allowDeposits: Boolean(dbSettings.allow_deposits),
+          allowWithdrawals: Boolean(dbSettings.allow_withdrawals),
+          maintenanceMode: Boolean(dbSettings.maintenance_mode),
+          autoApproveWithdrawals: Boolean(dbSettings.auto_approve_withdrawals),
+          autoApproveWithdrawalLimit: Number(dbSettings.auto_approve_withdrawal_limit || 30),
+          
+          // Branding
+          siteName: dbSettings.site_name || 'Jogo do Bicho',
+          siteDescription: dbSettings.site_description || 'A melhor plataforma de apostas online',
+          logoUrl: dbSettings.logo_url || '/img/logo.png',
+          faviconUrl: dbSettings.favicon_url || '/img/favicon.png',
+          
+          // BÔNUS - valores diretos do banco
+          signupBonusEnabled: Boolean(dbSettings.signup_bonus_enabled),
+          signupBonusAmount: Number(dbSettings.signup_bonus_amount || 10),
+          signupBonusRollover: Number(dbSettings.signup_bonus_rollover || 3),
+          signupBonusExpiration: Number(dbSettings.signup_bonus_expiration || 7),
+          firstDepositBonusEnabled: Boolean(dbSettings.first_deposit_bonus_enabled),
+          firstDepositBonusAmount: Number(dbSettings.first_deposit_bonus_amount || 100),
+          firstDepositBonusPercentage: Number(dbSettings.first_deposit_bonus_percentage || 100),
+          firstDepositBonusMaxAmount: Number(dbSettings.first_deposit_bonus_max_amount || 200),
+          firstDepositBonusRollover: Number(dbSettings.first_deposit_bonus_rollover || 3),
+          firstDepositBonusExpiration: Number(dbSettings.first_deposit_bonus_expiration || 7),
+          promotionalBannersEnabled: Boolean(dbSettings.promotional_banners_enabled),
+          allowBonusBets: Boolean(dbSettings.allow_bonus_bets)
+        };
+        
+        console.log('=== RESPOSTA PARA ADMIN ===');
+        console.log('signupBonusEnabled:', adminSettings.signupBonusEnabled);
+        console.log('firstDepositBonusEnabled:', adminSettings.firstDepositBonusEnabled);
+        console.log('==========================');
+        
+        res.json(adminSettings);
       } else {
         // Default values
         const defaultSettings = {
@@ -4906,8 +4930,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * ENDPOINT PARA CONTROLE COMPLETO DOS BÔNUS PELO ADMIN
    */
-  app.post("/api/bonus-settings-admin", async (req, res) => {
+  app.post("/api/bonus-settings-admin", requireAuth, requireAdmin, async (req, res) => {
     try {
+      console.log("📥 INÍCIO: Requisição recebida no endpoint /api/bonus-settings-admin");
+      console.log("👤 USUÁRIO: req.user =", req.user);
+      console.log("📄 BODY: req.body =", JSON.stringify(req.body));
+      
+      if (!req.user || req.user.role !== 'admin') {
+        console.log("❌ ERRO: Usuário não autorizado");
+        return res.status(403).json({ message: "Acesso negado. Apenas administradores podem modificar configurações de bônus." });
+      }
+      
       const bonusConfig = req.body;
       console.log("🎯 ADMIN: Salvando configurações de bônus:", JSON.stringify(bonusConfig));
       
