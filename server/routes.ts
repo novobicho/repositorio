@@ -3380,6 +3380,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🔄 Sistema de verificação automática de bônus (roda a cada 5 minutos)
+  setInterval(async () => {
+    try {
+      console.log('🔍 [VERIFICAÇÃO AUTOMÁTICA] Checando bônus pendentes...');
+      
+      // Buscar usuários que fizeram primeiro depósito mas não receberam bônus
+      const { rows: pendingUsers } = await pool.query(`
+        SELECT 
+          u.id, u.username, 
+          pt.amount as deposit_amount
+        FROM users u
+        JOIN payment_transactions pt ON u.id = pt.user_id
+        WHERE pt.type = 'deposit' 
+          AND pt.status = 'completed'
+          AND pt.created_at > NOW() - INTERVAL '1 hour'
+          AND NOT EXISTS (
+            SELECT 1 FROM payment_transactions pt2 
+            WHERE pt2.user_id = u.id 
+              AND pt2.type = 'deposit' 
+              AND pt2.status = 'completed' 
+              AND pt2.created_at < pt.created_at
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM user_bonuses ub 
+            WHERE ub.user_id = u.id 
+              AND ub.type = 'first_deposit'
+          )
+        LIMIT 10
+      `);
+
+      if (pendingUsers.length > 0) {
+        console.log(`🎁 [VERIFICAÇÃO AUTOMÁTICA] Encontrados ${pendingUsers.length} usuários para aplicar bônus`);
+        
+        for (const user of pendingUsers) {
+          console.log(`🎯 [AUTO-BÔNUS] Aplicando bônus para ${user.username}`);
+          await checkAndApplyFirstDepositBonus(user.id, user.deposit_amount);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [VERIFICAÇÃO AUTOMÁTICA] Erro:', error.message);
+    }
+  }, 5 * 60 * 1000); // Executa a cada 5 minutos
+
   // 🎁 Função para verificar e aplicar bônus de primeiro depósito
   async function checkAndApplyFirstDepositBonus(userId: number, depositAmount: number) {
     try {
