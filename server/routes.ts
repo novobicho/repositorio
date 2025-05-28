@@ -6540,6 +6540,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               amount: transaction.amount,
               newBalance
             });
+
+            // 🎁 APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
+            if (transaction.type === 'deposit') {
+              await checkAndApplyFirstDepositBonus(user.id, transaction.amount);
+            }
           }
         }
       } else if (payload.type === 'withdrawal.completed') {
