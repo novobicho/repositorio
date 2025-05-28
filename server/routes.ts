@@ -4119,6 +4119,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 
                 console.log(`BALANCE UPDATED: User ID ${transaction.userId}, New balance: ${user?.balance}, Added: ${transaction.amount}`);
                 console.log(`Saldo do usuário atualizado. Novo saldo: ${user?.balance}`);
+                
+                // 🎁 APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
+                if (transaction.type === 'deposit') {
+                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
+                }
               } catch (balanceError) {
                 console.error("Erro ao atualizar saldo do usuário:", balanceError);
                 return res.status(500).json({ message: "Erro ao atualizar saldo do usuário" });
