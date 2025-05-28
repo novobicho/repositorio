@@ -4433,9 +4433,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Status válidos que podemos receber do gateway
-      const validStatuses = ['pending', 'processing', 'completed', 'failed', 'cancelled'];
+      // Status válidos que podemos receber do gateway (incluindo status específicos da Pushin Pay)
+      const validStatuses = ['pending', 'processing', 'completed', 'approved', 'paid', 'failed', 'cancelled', 'expired'];
       if (!validStatuses.includes(status)) {
+        console.warn(`Status recebido não reconhecido: ${status}. Aceito: ${validStatuses.join(', ')}`);
         return res.status(400).json({ message: "Invalid transaction status" });
       }
       
@@ -4479,7 +4480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Se o pagamento foi bem-sucedido, adicionar saldo ao usuário
-      if (status === "completed" && updatedTransaction.userId) {
+      if ((status === "completed" || status === "approved" || status === "paid") && updatedTransaction.userId) {
         console.log(`Payment successful for transaction ${transactionId}. Updating user balance.`);
         
         try {
