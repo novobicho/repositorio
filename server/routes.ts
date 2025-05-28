@@ -2728,6 +2728,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('firstDepositBonusEnabled:', adminSettings.firstDepositBonusEnabled);
         console.log('==========================');
         
+        // Forçar headers para evitar cache
+        res.set({
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        });
+        
         res.json(adminSettings);
       } else {
         // Default values
