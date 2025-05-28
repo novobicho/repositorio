@@ -5005,39 +5005,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bonusConfig = req.body;
       console.log("✅ ADMIN: Salvando configurações de bônus:", JSON.stringify(bonusConfig));
       
-      // Atualizar diretamente na tabela system_settings
-      await pool.query(`
-        UPDATE system_settings SET 
-          first_deposit_bonus_enabled = $1,
-          first_deposit_bonus_amount = $2,
-          first_deposit_bonus_percentage = $3,
-          first_deposit_bonus_max_amount = $4,
-          first_deposit_bonus_rollover = $5,
-          first_deposit_bonus_expiration = $6,
-          signup_bonus_enabled = $7,
-          signup_bonus_amount = $8,
-          signup_bonus_rollover = $9,
-          signup_bonus_expiration = $10,
-          promotional_banners_enabled = $11
-        WHERE id = (SELECT id FROM system_settings LIMIT 1)
-      `, [
-        bonusConfig.firstDepositBonus?.enabled ?? false,
-        bonusConfig.firstDepositBonus?.amount ?? 100,
-        bonusConfig.firstDepositBonus?.percentage ?? 100,
-        bonusConfig.firstDepositBonus?.maxAmount ?? 200,
-        bonusConfig.firstDepositBonus?.rollover ?? 3,
-        bonusConfig.firstDepositBonus?.expiration ?? 7,
-        bonusConfig.signupBonus?.enabled ?? false,
-        bonusConfig.signupBonus?.amount ?? 10,
-        bonusConfig.signupBonus?.rollover ?? 3,
-        bonusConfig.signupBonus?.expiration ?? 7,
-        bonusConfig.promotionalBanners?.enabled ?? false
-      ]);
+      // Verificar se o formato é do BonusSettingsNew (com objetos signupBonus e firstDepositBonus)
+      if (bonusConfig.signupBonus && bonusConfig.firstDepositBonus) {
+        console.log("📝 Formato BonusSettingsNew detectado, convertendo...");
+        
+        // Atualizar com o novo formato
+        await pool.query(`
+          UPDATE system_settings SET 
+            first_deposit_bonus_enabled = $1,
+            first_deposit_bonus_amount = $2,
+            first_deposit_bonus_percentage = $3,
+            first_deposit_bonus_max_amount = $4,
+            first_deposit_bonus_rollover = $5,
+            first_deposit_bonus_expiration = $6,
+            signup_bonus_enabled = $7,
+            signup_bonus_amount = $8,
+            signup_bonus_rollover = $9,
+            signup_bonus_expiration = $10,
+            promotional_banners_enabled = $11
+          WHERE id = (SELECT id FROM system_settings LIMIT 1)
+        `, [
+          bonusConfig.firstDepositBonus.enabled,
+          bonusConfig.firstDepositBonus.amount || 100,
+          bonusConfig.firstDepositBonus.percentage || 100,
+          bonusConfig.firstDepositBonus.maxAmount || 200,
+          bonusConfig.firstDepositBonus.rollover || 3,
+          bonusConfig.firstDepositBonus.expiration || 7,
+          bonusConfig.signupBonus.enabled,
+          bonusConfig.signupBonus.amount || 10,
+          bonusConfig.signupBonus.rollover || 3,
+          bonusConfig.signupBonus.expiration || 7,
+          bonusConfig.promotionalBanners?.enabled || false
+        ]);
+        
+        console.log("✅ Configurações de bônus salvas com sucesso (formato novo)");
+      } else {
+        console.log("📝 Formato legado detectado, usando formato antigo...");
+        
+        // Atualizar diretamente na tabela system_settings (formato legado)
+        await pool.query(`
+          UPDATE system_settings SET 
+            first_deposit_bonus_enabled = $1,
+            first_deposit_bonus_amount = $2,
+            first_deposit_bonus_percentage = $3,
+            first_deposit_bonus_max_amount = $4,
+            first_deposit_bonus_rollover = $5,
+            first_deposit_bonus_expiration = $6,
+            signup_bonus_enabled = $7,
+            signup_bonus_amount = $8,
+            signup_bonus_rollover = $9,
+            signup_bonus_expiration = $10,
+            promotional_banners_enabled = $11
+          WHERE id = (SELECT id FROM system_settings LIMIT 1)
+        `, [
+          bonusConfig.firstDepositBonusEnabled ?? false,
+          bonusConfig.firstDepositBonusAmount ?? 100,
+          bonusConfig.firstDepositBonusPercentage ?? 100,
+          bonusConfig.firstDepositBonusMaxAmount ?? 200,
+          bonusConfig.firstDepositBonusRollover ?? 3,
+          bonusConfig.firstDepositBonusExpiration ?? 7,
+          bonusConfig.signupBonusEnabled ?? false,
+          bonusConfig.signupBonusAmount ?? 10,
+          bonusConfig.signupBonusRollover ?? 3,
+          bonusConfig.signupBonusExpiration ?? 7,
+          bonusConfig.promotionalBannersEnabled ?? false
+        ]);
+        
+        console.log("✅ Configurações de bônus salvas com sucesso (formato legado)");
+      }
       
-      console.log("Configurações de bônus salvas com sucesso no banco de dados");
+      
+      // Buscar e retornar configurações atualizadas
+      const { rows } = await pool.query('SELECT * FROM system_settings LIMIT 1');
+      const updatedSettings = rows[0];
+      
+      console.log("🔄 Configurações finais salvas:", {
+        firstDepositBonusEnabled: updatedSettings.first_deposit_bonus_enabled,
+        firstDepositBonusPercentage: updatedSettings.first_deposit_bonus_percentage,
+        signupBonusEnabled: updatedSettings.signup_bonus_enabled
+      });
+      
       res.json({ 
         message: "Configurações de bônus salvas com sucesso",
-        data: bonusConfig
+        settings: updatedSettings
       });
     } catch (error) {
       console.error("Erro ao salvar configurações de bônus:", error);
