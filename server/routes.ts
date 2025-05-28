@@ -42,10 +42,7 @@ const requireAuth = (req: Request, res: Response, next: Function) => {
 
 // Admin route middleware
 const requireAdmin = (req: Request, res: Response, next: Function) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-  if (!req.user || !req.user.isAdmin) {
+  if (!req.isAuthenticated() || !req.user.isAdmin) {
     return res.status(403).json({ message: "Forbidden" });
   }
   next();
@@ -730,9 +727,242 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Rotas para gerenciamento de bônus (admin)
   
-
+  // Rota para obter todas as configurações de bônus do sistema
+  app.get('/api/admin/bonus-settings', requireAdmin, async (req, res) => {
+    try {
+      // Primeiro tentar obter as configurações através do PostgreSQL diretamente para garantir dados consistentes
+      console.log('Obtendo configurações de bônus do sistema...');
+      
+      const result = await pool.query(`
+        SELECT 
+          signup_bonus_enabled,
+          signup_bonus_amount,
+          signup_bonus_rollover,
+          signup_bonus_expiration,
+          first_deposit_bonus_enabled,
+          first_deposit_bonus_amount,
+          first_deposit_bonus_percentage,
+          first_deposit_bonus_max_amount,
+          first_deposit_bonus_rollover,
+          first_deposit_bonus_expiration,
+          promotional_banners_enabled
+        FROM system_settings
+        WHERE id = (SELECT MAX(id) FROM system_settings)
+      `);
+      
+      // Se não encontrar registros, tentar obter via API de armazenamento
+      let settings;
+      
+      if (result.rows.length > 0) {
+        console.log('Configurações de bônus obtidas diretamente do banco de dados.');
+        settings = result.rows[0];
+      } else {
+        console.log('Tentando obter configurações via storage.getSystemSettings()...');
+        settings = await storage.getSystemSettings();
+      }
+      
+      // Configurações padrão no caso de não encontrar ou valores nulos
+      const defaultConfig = {
+        signupBonus: {
+          enabled: false,
+          amount: 10,
+          rollover: 3,
+          expiration: 7
+        },
+        firstDepositBonus: {
+          enabled: false,
+          amount: 100,
+          percentage: 100,
+          maxAmount: 200,
+          rollover: 3,
+          expiration: 7
+        },
+        promotionalBanners: {
+          enabled: false
+        }
+      };
+      
+      const response = {
+        signupBonus: {
+          enabled: settings?.signup_bonus_enabled ?? false,
+          amount: Number(settings?.signup_bonus_amount ?? defaultConfig.signupBonus.amount),
+          rollover: Number(settings?.signup_bonus_rollover ?? defaultConfig.signupBonus.rollover),
+          expiration: Number(settings?.signup_bonus_expiration ?? defaultConfig.signupBonus.expiration)
+        },
+        firstDepositBonus: {
+          enabled: settings?.first_deposit_bonus_enabled ?? false,
+          amount: Number(settings?.first_deposit_bonus_amount ?? defaultConfig.firstDepositBonus.amount),
+          percentage: Number(settings?.first_deposit_bonus_percentage ?? defaultConfig.firstDepositBonus.percentage),
+          maxAmount: Number(settings?.first_deposit_bonus_max_amount ?? defaultConfig.firstDepositBonus.maxAmount),
+          rollover: Number(settings?.first_deposit_bonus_rollover ?? defaultConfig.firstDepositBonus.rollover),
+          expiration: Number(settings?.first_deposit_bonus_expiration ?? defaultConfig.firstDepositBonus.expiration)
+        },
+        promotionalBanners: {
+          enabled: settings?.promotional_banners_enabled ?? false
+        }
+      };
+      
+      console.log('Enviando resposta de configurações de bônus:', JSON.stringify(response));
+      res.json(response);
+    } catch (error) {
+      console.error("Erro ao buscar configurações de bônus:", error);
+      res.status(500).json({ 
+        message: "Erro ao buscar configurações de bônus",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
   
-  // ENDPOINT REMOVIDO - USANDO APENAS O ENDPOINT UNIFICADO DA LINHA 5040
+  // Rota para atualizar as configurações de bônus
+  app.post('/api/admin/bonus-settings', requireAdmin, async (req, res) => {
+    try {
+      const updates = req.body;
+      console.log("Recebendo atualização de configurações de bônus:", JSON.stringify(updates));
+      
+      // Validar estrutura dos dados recebidos
+      if (!updates.signupBonus || !updates.firstDepositBonus) {
+        return res.status(400).json({ 
+          message: "Estrutura de dados inválida. É necessário incluir signupBonus e firstDepositBonus" 
+        });
+      }
+      
+      // Extrair dados dos bônus
+      const { signupBonus, firstDepositBonus } = updates;
+      
+      // Preparar dados para atualização no banco de dados
+      const updateData = {
+        // Bônus de cadastro
+        signupBonusEnabled: Boolean(signupBonus.enabled),
+        signupBonusAmount: Number(signupBonus.amount) || 10,
+        signupBonusRollover: Number(signupBonus.rollover) || 3,
+        signupBonusExpiration: Number(signupBonus.expiration) || 7,
+        
+        // Bônus de primeiro depósito
+        firstDepositBonusEnabled: Boolean(firstDepositBonus.enabled),
+        firstDepositBonusAmount: Number(firstDepositBonus.amount) || 100,
+        firstDepositBonusPercentage: Number(firstDepositBonus.percentage) || 100,
+        firstDepositBonusMaxAmount: Number(firstDepositBonus.maxAmount) || 200,
+        firstDepositBonusRollover: Number(firstDepositBonus.rollover) || 3,
+        firstDepositBonusExpiration: Number(firstDepositBonus.expiration) || 7,
+        
+        // Banners promocionais
+        promotionalBannersEnabled: Boolean(updates.promotionalBanners?.enabled || false)
+      };
+      
+      console.log("Dados preparados para salvar no banco:", updateData);
+      
+      // Buscar configurações atuais para mesclar
+      const currentSettings = await storage.getSystemSettings();
+      if (!currentSettings) {
+        return res.status(404).json({ message: "Configurações do sistema não encontradas" });
+      }
+      
+      // Mesclar com configurações existentes
+      const mergedSettings = {
+        ...currentSettings,
+        ...updateData
+      };
+      
+      // Salvar no banco de dados
+      const savedSettings = await storage.saveSystemSettings(mergedSettings);
+      
+      console.log("✅ Configurações de bônus salvas com sucesso no banco de dados");
+      
+      // Retornar resposta de sucesso
+      res.json({
+        success: true,
+        message: "Configurações de bônus atualizadas com sucesso",
+        settings: {
+          signupBonus: {
+            enabled: savedSettings.signupBonusEnabled,
+            amount: savedSettings.signupBonusAmount,
+            rollover: savedSettings.signupBonusRollover,
+            expiration: savedSettings.signupBonusExpiration
+          },
+          firstDepositBonus: {
+            enabled: savedSettings.firstDepositBonusEnabled,
+            amount: savedSettings.firstDepositBonusAmount,
+            percentage: savedSettings.firstDepositBonusPercentage,
+            maxAmount: savedSettings.firstDepositBonusMaxAmount,
+            rollover: savedSettings.firstDepositBonusRollover,
+            expiration: savedSettings.firstDepositBonusExpiration
+          },
+          promotionalBanners: {
+            enabled: savedSettings.promotionalBannersEnabled
+          }
+        }
+      });
+      
+    } catch (error) {
+      console.error("Erro ao salvar configurações de bônus:", error);
+      res.status(500).json({ 
+        message: "Erro ao salvar configurações de bônus",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  app.get('/api/admin/bonus-settings', requireAdmin, async (req, res) => {
+    try {
+      console.log('Buscando configurações de bônus...');
+      
+      const settings = await storage.getSystemSettings();
+      
+      if (!settings) {
+        console.log('Configurações não encontradas, retornando padrões');
+        return res.status(404).json({ message: "System settings not found" });
+      }
+      
+      const defaultConfig = {
+        signupBonus: {
+          enabled: false,
+          amount: 15,
+          rollover: 2,
+          expiration: 7
+        },
+        firstDepositBonus: {
+          enabled: false,
+          amount: 100,
+          percentage: 100,
+          maxAmount: 300,
+          rollover: 2,
+          expiration: 14
+        },
+        promotionalBanners: {
+          enabled: false
+        }
+      };
+      
+      const response = {
+        signupBonus: {
+          enabled: settings?.signupBonusEnabled ?? defaultConfig.signupBonus.enabled,
+          amount: Number(settings?.signupBonusAmount ?? defaultConfig.signupBonus.amount),
+          rollover: Number(settings?.signupBonusRollover ?? defaultConfig.signupBonus.rollover),
+          expiration: Number(settings?.signupBonusExpiration ?? defaultConfig.signupBonus.expiration)
+        },
+        firstDepositBonus: {
+          enabled: settings?.firstDepositBonusEnabled ?? defaultConfig.firstDepositBonus.enabled,
+          amount: Number(settings?.firstDepositBonusAmount ?? defaultConfig.firstDepositBonus.amount),
+          percentage: Number(settings?.firstDepositBonusPercentage ?? defaultConfig.firstDepositBonus.percentage),
+          maxAmount: Number(settings?.firstDepositBonusMaxAmount ?? defaultConfig.firstDepositBonus.maxAmount),
+          rollover: Number(settings?.firstDepositBonusRollover ?? defaultConfig.firstDepositBonus.rollover),
+          expiration: Number(settings?.firstDepositBonusExpiration ?? defaultConfig.firstDepositBonus.expiration)
+        },
+        promotionalBanners: {
+          enabled: settings?.promotionalBannersEnabled ?? defaultConfig.promotionalBanners.enabled
+        }
+      };
+      
+      console.log('Enviando resposta de configurações de bônus:', JSON.stringify(response));
+      res.json(response);
+    } catch (error) {
+      console.error("Erro ao buscar configurações de bônus:", error);
+      res.status(500).json({ 
+        message: "Erro ao buscar configurações de bônus",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
   
   // Rotas para gerenciar banners promocionais
   app.get('/api/admin/promotional-banners', requireAdmin, async (req, res) => {
@@ -2675,67 +2905,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Erro ao verificar/atualizar schema:', schemaError);
       }
       
-      // Obter dados DIRETAMENTE do banco para o painel admin
-      const { rows } = await pool.query('SELECT * FROM system_settings LIMIT 1');
+      // Check if settings exist in database, otherwise return defaults
+      const settings = await storage.getSystemSettings();
       
-      if (rows.length > 0) {
-        const dbSettings = rows[0];
-        
-        console.log('=== DADOS DO BANCO PARA ADMIN ===');
-        console.log('signup_bonus_enabled:', dbSettings.signup_bonus_enabled);
-        console.log('first_deposit_bonus_enabled:', dbSettings.first_deposit_bonus_enabled);
-        console.log('===================================');
-        
-        const adminSettings = {
-          // Configurações básicas
-          maxBetAmount: Number(dbSettings.max_bet_amount),
-          maxPayout: Number(dbSettings.max_payout),
-          minBetAmount: Number(dbSettings.min_bet_amount || 0.5),
-          defaultBetAmount: Number(dbSettings.default_bet_amount || 2),
-          mainColor: dbSettings.main_color,
-          secondaryColor: dbSettings.secondary_color,
-          accentColor: dbSettings.accent_color,
-          allowUserRegistration: Boolean(dbSettings.allow_user_registration),
-          allowDeposits: Boolean(dbSettings.allow_deposits),
-          allowWithdrawals: Boolean(dbSettings.allow_withdrawals),
-          maintenanceMode: Boolean(dbSettings.maintenance_mode),
-          autoApproveWithdrawals: Boolean(dbSettings.auto_approve_withdrawals),
-          autoApproveWithdrawalLimit: Number(dbSettings.auto_approve_withdrawal_limit || 30),
+      if (settings) {
+        // Obter dados diretamente do banco para garantir que temos os novos campos
+        const { rows } = await pool.query('SELECT * FROM system_settings WHERE id = 1');
+        if (rows.length > 0) {
+          const dbSettings = rows[0];
           
-          // Branding
-          siteName: dbSettings.site_name || 'Jogo do Bicho',
-          siteDescription: dbSettings.site_description || 'A melhor plataforma de apostas online',
-          logoUrl: dbSettings.logo_url || '/img/logo.png',
-          faviconUrl: dbSettings.favicon_url || '/img/favicon.png',
-          
-          // BÔNUS - valores diretos do banco
-          signupBonusEnabled: Boolean(dbSettings.signup_bonus_enabled),
-          signupBonusAmount: Number(dbSettings.signup_bonus_amount || 10),
-          signupBonusRollover: Number(dbSettings.signup_bonus_rollover || 3),
-          signupBonusExpiration: Number(dbSettings.signup_bonus_expiration || 7),
-          firstDepositBonusEnabled: Boolean(dbSettings.first_deposit_bonus_enabled),
-          firstDepositBonusAmount: Number(dbSettings.first_deposit_bonus_amount || 100),
-          firstDepositBonusPercentage: Number(dbSettings.first_deposit_bonus_percentage || 100),
-          firstDepositBonusMaxAmount: Number(dbSettings.first_deposit_bonus_max_amount || 200),
-          firstDepositBonusRollover: Number(dbSettings.first_deposit_bonus_rollover || 3),
-          firstDepositBonusExpiration: Number(dbSettings.first_deposit_bonus_expiration || 7),
-          promotionalBannersEnabled: Boolean(dbSettings.promotional_banners_enabled),
-          allowBonusBets: Boolean(dbSettings.allow_bonus_bets)
-        };
+          // Adicionar os novos campos se existirem no banco
+          if (dbSettings.site_name) settings.siteName = dbSettings.site_name;
+          if (dbSettings.site_description) settings.siteDescription = dbSettings.site_description;
+          if (dbSettings.logo_url) settings.logoUrl = dbSettings.logo_url;
+          if (dbSettings.favicon_url) settings.faviconUrl = dbSettings.favicon_url;
+        }
         
-        console.log('=== RESPOSTA PARA ADMIN ===');
-        console.log('signupBonusEnabled:', adminSettings.signupBonusEnabled);
-        console.log('firstDepositBonusEnabled:', adminSettings.firstDepositBonusEnabled);
-        console.log('==========================');
-        
-        // Forçar headers para evitar cache
-        res.set({
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        });
-        
-        res.json(adminSettings);
+        res.json(settings);
       } else {
         // Default values
         const defaultSettings = {
@@ -3380,49 +3566,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 🔄 Sistema de verificação automática de bônus (roda a cada 5 minutos)
-  setInterval(async () => {
-    try {
-      console.log('🔍 [VERIFICAÇÃO AUTOMÁTICA] Checando bônus pendentes...');
-      
-      // Buscar usuários que fizeram primeiro depósito mas não receberam bônus
-      const { rows: pendingUsers } = await pool.query(`
-        SELECT 
-          u.id, u.username, 
-          pt.amount as deposit_amount
-        FROM users u
-        JOIN payment_transactions pt ON u.id = pt.user_id
-        WHERE pt.type = 'deposit' 
-          AND pt.status = 'completed'
-          AND pt.created_at > NOW() - INTERVAL '1 hour'
-          AND NOT EXISTS (
-            SELECT 1 FROM payment_transactions pt2 
-            WHERE pt2.user_id = u.id 
-              AND pt2.type = 'deposit' 
-              AND pt2.status = 'completed' 
-              AND pt2.created_at < pt.created_at
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM user_bonuses ub 
-            WHERE ub.user_id = u.id 
-              AND ub.type = 'first_deposit'
-          )
-        LIMIT 10
-      `);
-
-      if (pendingUsers.length > 0) {
-        console.log(`🎁 [VERIFICAÇÃO AUTOMÁTICA] Encontrados ${pendingUsers.length} usuários para aplicar bônus`);
-        
-        for (const user of pendingUsers) {
-          console.log(`🎯 [AUTO-BÔNUS] Aplicando bônus para ${user.username}`);
-          await checkAndApplyFirstDepositBonus(user.id, user.deposit_amount);
-        }
-      }
-    } catch (error) {
-      console.error('❌ [VERIFICAÇÃO AUTOMÁTICA] Erro:', error.message);
-    }
-  }, 5 * 60 * 1000); // Executa a cada 5 minutos
-
   // 🎁 Função para verificar e aplicar bônus de primeiro depósito
   async function checkAndApplyFirstDepositBonus(userId: number, depositAmount: number) {
     try {
@@ -3437,7 +3580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userTransactions = await storage.getUserTransactions(userId);
       const completedDeposits = userTransactions.filter(t => 
         t.type === 'deposit' && 
-        (t.status === 'completed' || t.status === 'approved')
+        t.status === 'completed'
       );
 
       if (completedDeposits.length > 1) {
@@ -3479,6 +3622,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       await storage.createUserBonus(bonusData);
+
+      // Atualizar saldo de bônus do usuário
+      await storage.updateUserBonusBalance(userId, bonusAmount);
 
       console.log(`🎁 [BÔNUS APLICADO] Usuário ${userId} recebeu R$${bonusAmount.toFixed(2)} de bônus de primeiro depósito (${bonusPercentage}% de R$${depositAmount.toFixed(2)})`);
       console.log(`📋 [BÔNUS DETALHES] Rollover: R$${(bonusAmount * rollover).toFixed(2)}, Expira em: ${expirationDate.toLocaleDateString()}`);
@@ -4119,11 +4265,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 
                 console.log(`BALANCE UPDATED: User ID ${transaction.userId}, New balance: ${user?.balance}, Added: ${transaction.amount}`);
                 console.log(`Saldo do usuário atualizado. Novo saldo: ${user?.balance}`);
-                
-                // 🎁 APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
-                if (transaction.type === 'deposit') {
-                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
-                }
               } catch (balanceError) {
                 console.error("Erro ao atualizar saldo do usuário:", balanceError);
                 return res.status(500).json({ message: "Erro ao atualizar saldo do usuário" });
@@ -4433,10 +4574,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Status válidos que podemos receber do gateway (incluindo status específicos da Pushin Pay)
-      const validStatuses = ['pending', 'processing', 'completed', 'approved', 'paid', 'failed', 'cancelled', 'expired'];
+      // Status válidos que podemos receber do gateway
+      const validStatuses = ['pending', 'processing', 'completed', 'failed', 'cancelled'];
       if (!validStatuses.includes(status)) {
-        console.warn(`Status recebido não reconhecido: ${status}. Aceito: ${validStatuses.join(', ')}`);
         return res.status(400).json({ message: "Invalid transaction status" });
       }
       
@@ -4480,7 +4620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Se o pagamento foi bem-sucedido, adicionar saldo ao usuário
-      if ((status === "completed" || status === "approved" || status === "paid") && updatedTransaction.userId) {
+      if (status === "completed" && updatedTransaction.userId) {
         console.log(`Payment successful for transaction ${transactionId}. Updating user balance.`);
         
         try {
@@ -4610,17 +4750,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     
                     console.log(`[BÔNUS] Transação registrada com ID ${bonusTransaction.id}`);
                     
-                    // *** BÔNUS CRIADO COM SUCESSO ***
-                    console.log(`[BÔNUS] ✅ SUCESSO: Bônus de primeiro depósito criado com sucesso!`);
-                    console.log(`[BÔNUS] Valor: R$${bonusAmount.toFixed(2)}, Rollover: R$${rolloverAmount.toFixed(2)}`);
+                    // *** ETAPA CRÍTICA: Atualizar o saldo de bônus do usuário ***
+                    console.log(`[BÔNUS] ETAPA CRÍTICA: Chamando updateUserBonusBalance para atualizar saldo de usuário ${userId} com +${bonusAmount}`);
                     
-                    // Verificar o saldo de bônus atual do usuário
-                    const currentBonusBalance = await storage.getUserBonusBalance(userId);
-                    console.log(`[BÔNUS] Saldo total de bônus do usuário: R$${currentBonusBalance.toFixed(2)}`);
+                    // Verificar saldo antes da atualização
+                    const bonusBalanceBefore = await storage.getUserBonusBalance(userId);
+                    console.log(`[BÔNUS] Saldo de bônus ANTES da atualização: R$${bonusBalanceBefore}`);
                     
-                    // Verificar todos os bônus do usuário
+                    // Atualizar saldo de bônus
+                    await storage.updateUserBonusBalance(userId, bonusAmount);
+                    
+                    // Verificar se o saldo foi atualizado corretamente com várias verificações
+                    const updatedBonus = await storage.getUserBonusBalance(userId);
+                    console.log(`[BÔNUS] Saldo de BÔNUS do usuário APÓS atualização: R$${updatedBonus}`);
+                    
+                    // Verificação adicional: consultar todos os bônus do usuário
                     const allUserBonuses = await storage.getUserBonuses(userId);
-                    console.log(`[BÔNUS] Usuário ${userId} tem ${allUserBonuses.length} bônus ativo(s)`)
+                    console.log(`[BÔNUS] Verificação adicional: Usuário ${userId} tem ${allUserBonuses.length} bônus no total`);
+                    
+                    const expectedBalance = bonusBalanceBefore + bonusAmount;
+                    if (Math.abs(updatedBonus - expectedBalance) < 0.01) { // Tolerância para arredondamento
+                      console.log(`[BÔNUS] ✅ SUCESSO: Bônus aplicado corretamente. Saldo anterior: R$${bonusBalanceBefore}, Adicionado: R$${bonusAmount}, Novo saldo: R$${updatedBonus}`);
+                    } else {
+                      console.error(`[BÔNUS] ❌ ERRO: Bônus não foi aplicado corretamente ao saldo. Esperado: R$${expectedBalance}, Atual: R$${updatedBonus}`);
+                    }
                   } catch (error) {
                     console.error(`[BÔNUS] ERRO ao processar bônus: ${error.message}`);
                     console.error(error.stack);
@@ -4965,172 +5118,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-
-
   /**
-   * ENDPOINT PARA CONTROLE COMPLETO DOS BÔNUS PELO ADMIN
+   * API para obter as configurações de bônus atuais
+   * IMPLEMENTAÇÃO REESCRITA DO ZERO
    */
-  app.post("/api/bonus-settings-admin", requireAuth, requireAdmin, async (req, res) => {
+  app.get("/api/admin/bonus-settings", requireAdmin, async (req, res) => {
     try {
-      console.log("📥 INÍCIO: Requisição recebida no endpoint /api/bonus-settings-admin");
-      console.log("👤 USUÁRIO: req.user =", req.user);
-      console.log("📄 BODY: req.body =", JSON.stringify(req.body));
+      // Usando o novo módulo especializado
+      const { getBonusSettings } = require("./bonus-settings");
+      const bonusSettings = await getBonusSettings();
       
-      if (!req.user || req.user.role !== 'admin') {
-        console.log("❌ ERRO: Usuário não autorizado");
-        return res.status(403).json({ message: "Acesso negado. Apenas administradores podem modificar configurações de bônus." });
-      }
-      
-      const bonusConfig = req.body;
-      console.log("🎯 ADMIN: Salvando configurações de bônus:", JSON.stringify(bonusConfig));
-      
-      // Atualizar diretamente na tabela system_settings
-      const result = await pool.query(`
-        UPDATE system_settings SET 
-          first_deposit_bonus_enabled = $1,
-          first_deposit_bonus_amount = $2,
-          first_deposit_bonus_percentage = $3,
-          first_deposit_bonus_max_amount = $4,
-          first_deposit_bonus_rollover = $5,
-          first_deposit_bonus_expiration = $6,
-          signup_bonus_enabled = $7,
-          signup_bonus_amount = $8,
-          signup_bonus_rollover = $9,
-          signup_bonus_expiration = $10,
-          promotional_banners_enabled = $11
-        WHERE id = (SELECT id FROM system_settings LIMIT 1)
-        RETURNING *
-      `, [
-        bonusConfig.firstDepositBonus?.enabled ?? false,
-        bonusConfig.firstDepositBonus?.amount ?? 100,
-        bonusConfig.firstDepositBonus?.percentage ?? 100,
-        bonusConfig.firstDepositBonus?.maxAmount ?? 200,
-        bonusConfig.firstDepositBonus?.rollover ?? 3,
-        bonusConfig.firstDepositBonus?.expiration ?? 7,
-        bonusConfig.signupBonus?.enabled ?? false,
-        bonusConfig.signupBonus?.amount ?? 10,
-        bonusConfig.signupBonus?.rollover ?? 3,
-        bonusConfig.signupBonus?.expiration ?? 7,
-        bonusConfig.promotionalBanners?.enabled ?? false
-      ]);
-      
-      console.log("🔧 TESTE: Configurações salvas, resultado:", result.rowCount);
-      res.json({ 
-        message: "Configurações de bônus salvas com sucesso (TESTE)",
-        data: bonusConfig,
-        updated: result.rowCount > 0
-      });
+      console.log("Enviando configurações de bônus:", JSON.stringify(bonusSettings));
+      res.json(bonusSettings);
     } catch (error) {
-      console.error("🔧 TESTE: Erro ao salvar:", error);
-      res.status(500).json({ 
-        message: "Erro ao salvar configurações de bônus (TESTE)",
-        error: error.message || "Erro desconhecido"
-      });
+      console.error("Erro ao obter configurações de bônus:", error);
+      res.status(500).json({ message: "Erro ao obter configurações de bônus" });
     }
   });
-
-  /**
-   * ENDPOINT ÚNICO PARA SALVAR CONFIGURAÇÕES DE BÔNUS (ADMIN)
-   * Salva diretamente no banco de dados - fonte única de verdade
-   */
-  app.post("/api/admin/bonus-settings", async (req, res) => {
-    try {
-      const bonusConfig = req.body;
-      console.log("✅ ADMIN: Salvando configurações de bônus:", JSON.stringify(bonusConfig));
-      
-      // Verificar se o formato é do BonusSettingsNew (com objetos signupBonus e firstDepositBonus)
-      if (bonusConfig.signupBonus && bonusConfig.firstDepositBonus) {
-        console.log("📝 Formato BonusSettingsNew detectado, convertendo...");
-        
-        // Atualizar com o novo formato
-        await pool.query(`
-          UPDATE system_settings SET 
-            first_deposit_bonus_enabled = $1,
-            first_deposit_bonus_amount = $2,
-            first_deposit_bonus_percentage = $3,
-            first_deposit_bonus_max_amount = $4,
-            first_deposit_bonus_rollover = $5,
-            first_deposit_bonus_expiration = $6,
-            signup_bonus_enabled = $7,
-            signup_bonus_amount = $8,
-            signup_bonus_rollover = $9,
-            signup_bonus_expiration = $10,
-            promotional_banners_enabled = $11
-          WHERE id = (SELECT id FROM system_settings LIMIT 1)
-        `, [
-          bonusConfig.firstDepositBonus.enabled,
-          bonusConfig.firstDepositBonus.amount || 100,
-          bonusConfig.firstDepositBonus.percentage || 100,
-          bonusConfig.firstDepositBonus.maxAmount || 200,
-          bonusConfig.firstDepositBonus.rollover || 3,
-          bonusConfig.firstDepositBonus.expiration || 7,
-          bonusConfig.signupBonus.enabled,
-          bonusConfig.signupBonus.amount || 10,
-          bonusConfig.signupBonus.rollover || 3,
-          bonusConfig.signupBonus.expiration || 7,
-          bonusConfig.promotionalBanners?.enabled || false
-        ]);
-        
-        console.log("✅ Configurações de bônus salvas com sucesso (formato novo)");
-      } else {
-        console.log("📝 Formato legado detectado, usando formato antigo...");
-        
-        // Atualizar diretamente na tabela system_settings (formato legado)
-        await pool.query(`
-          UPDATE system_settings SET 
-            first_deposit_bonus_enabled = $1,
-            first_deposit_bonus_amount = $2,
-            first_deposit_bonus_percentage = $3,
-            first_deposit_bonus_max_amount = $4,
-            first_deposit_bonus_rollover = $5,
-            first_deposit_bonus_expiration = $6,
-            signup_bonus_enabled = $7,
-            signup_bonus_amount = $8,
-            signup_bonus_rollover = $9,
-            signup_bonus_expiration = $10,
-            promotional_banners_enabled = $11
-          WHERE id = (SELECT id FROM system_settings LIMIT 1)
-        `, [
-          bonusConfig.firstDepositBonusEnabled ?? false,
-          bonusConfig.firstDepositBonusAmount ?? 100,
-          bonusConfig.firstDepositBonusPercentage ?? 100,
-          bonusConfig.firstDepositBonusMaxAmount ?? 200,
-          bonusConfig.firstDepositBonusRollover ?? 3,
-          bonusConfig.firstDepositBonusExpiration ?? 7,
-          bonusConfig.signupBonusEnabled ?? false,
-          bonusConfig.signupBonusAmount ?? 10,
-          bonusConfig.signupBonusRollover ?? 3,
-          bonusConfig.signupBonusExpiration ?? 7,
-          bonusConfig.promotionalBannersEnabled ?? false
-        ]);
-        
-        console.log("✅ Configurações de bônus salvas com sucesso (formato legado)");
-      }
-      
-      
-      // Buscar e retornar configurações atualizadas
-      const { rows } = await pool.query('SELECT * FROM system_settings LIMIT 1');
-      const updatedSettings = rows[0];
-      
-      console.log("🔄 Configurações finais salvas:", {
-        firstDepositBonusEnabled: updatedSettings.first_deposit_bonus_enabled,
-        firstDepositBonusPercentage: updatedSettings.first_deposit_bonus_percentage,
-        signupBonusEnabled: updatedSettings.signup_bonus_enabled
-      });
-      
-      res.json({ 
-        message: "Configurações de bônus salvas com sucesso",
-        settings: updatedSettings
-      });
-    } catch (error) {
-      console.error("Erro ao salvar configurações de bônus:", error);
-      res.status(500).json({ 
-        message: "Erro ao salvar configurações de bônus",
-        error: error.message || "Erro desconhecido"
-      });
-    }
-  });
-
   
   /**
    * Endpoint para forçar atualização da configuração de bônus para 98%
@@ -5157,57 +5161,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.get("/api/bonus-settings", async (req, res) => {
     try {
+      // Obter configurações diretamente do banco de dados
       console.log("Obtendo configurações de bônus do sistema...");
       
-      // CONSULTA DIRETA AO BANCO - MESMA QUERY DO ADMIN
       const result = await pool.query(`
         SELECT 
-          first_deposit_bonus_enabled,
-          first_deposit_bonus_amount,
-          first_deposit_bonus_percentage,
-          first_deposit_bonus_max_amount,
-          first_deposit_bonus_rollover,
-          first_deposit_bonus_expiration,
-          signup_bonus_enabled,
-          signup_bonus_amount,
-          signup_bonus_rollover,
+          signup_bonus_enabled, 
+          signup_bonus_amount, 
+          signup_bonus_rollover, 
           signup_bonus_expiration,
+          first_deposit_bonus_enabled, 
+          first_deposit_bonus_amount,
+          first_deposit_bonus_percentage, 
+          first_deposit_bonus_max_amount, 
+          first_deposit_bonus_rollover, 
+          first_deposit_bonus_expiration,
           promotional_banners_enabled
         FROM system_settings 
         LIMIT 1
       `);
       
-      const settings = result.rows[0] || {};
-      console.log("Dados brutos do banco para bônus público:", settings);
+      if (result.rows.length === 0) {
+        throw new Error("Configurações de sistema não encontradas");
+      }
       
-      // USAR VALORES REAIS DO BANCO DE DADOS
+      const settings = result.rows[0];
+      console.log("Configurações de bônus obtidas diretamente do banco de dados.");
+      
+      // Transformar formato do banco para o formato da API
       const bonusSettings = {
         signupBonus: {
-          enabled: settings.signup_bonus_enabled ?? false,
-          amount: Number(settings.signup_bonus_amount ?? 10),
-          rollover: Number(settings.signup_bonus_rollover ?? 3),
-          expiration: Number(settings.signup_bonus_expiration ?? 7)
+          enabled: settings.signup_bonus_enabled || false,
+          amount: settings.signup_bonus_amount || 0,
+          rollover: settings.signup_bonus_rollover || 1,
+          expiration: settings.signup_bonus_expiration || 7
         },
         firstDepositBonus: {
-          enabled: settings.first_deposit_bonus_enabled ?? false,
-          amount: Number(settings.first_deposit_bonus_amount ?? 100),
-          percentage: Number(settings.first_deposit_bonus_percentage ?? 100),
-          maxAmount: Number(settings.first_deposit_bonus_max_amount ?? 200),
-          rollover: Number(settings.first_deposit_bonus_rollover ?? 3),
-          expiration: Number(settings.first_deposit_bonus_expiration ?? 7)
+          enabled: settings.first_deposit_bonus_enabled || false,
+          amount: settings.first_deposit_bonus_amount || 0,
+          percentage: settings.first_deposit_bonus_percentage || 100,
+          maxAmount: settings.first_deposit_bonus_max_amount || 100,
+          rollover: settings.first_deposit_bonus_rollover || 1,
+          expiration: settings.first_deposit_bonus_expiration || 7
         },
         promotionalBanners: {
-          enabled: settings.promotional_banners_enabled ?? false
+          enabled: settings.promotional_banners_enabled || false
         }
       };
-      
-      console.log("DEBUG DETALHADO:", {
-        percentageFromDB: settings.first_deposit_bonus_percentage,
-        percentageConverted: Number(settings.first_deposit_bonus_percentage ?? 100),
-        maxAmountFromDB: settings.first_deposit_bonus_max_amount,
-        maxAmountConverted: Number(settings.first_deposit_bonus_max_amount ?? 200),
-        finalObject: bonusSettings.firstDepositBonus
-      });
       
       console.log("Enviando resposta de configurações de bônus:", JSON.stringify(bonusSettings));
       res.json(bonusSettings);
@@ -5217,7 +5217,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
+  /**
+   * API para salvar as configurações de bônus
+   * IMPLEMENTAÇÃO REESCRITA DO ZERO
+   */
+  app.post("/api/admin/bonus-settings", requireAdmin, async (req, res) => {
+    try {
+      const { saveBonusSettings } = require("./bonus-settings");
+      const bonusConfig = req.body;
+      
+      console.log("Recebido para salvar:", JSON.stringify(bonusConfig));
+      
+      // Validando se o formato dos dados recebidos está correto
+      if (!bonusConfig.signupBonus || !bonusConfig.firstDepositBonus) {
+        return res.status(400).json({ 
+          message: "Formato de dados inválido. Verifique a estrutura dos dados enviados."
+        });
+      }
+      
+      // Utiliza o módulo especializado para salvar
+      const success = await saveBonusSettings(bonusConfig);
+      
+      if (success) {
+        res.json({ 
+          message: "Configurações de bônus salvas com sucesso",
+          data: bonusConfig
+        });
+      } else {
+        res.status(500).json({ 
+          message: "Erro ao salvar configurações de bônus"
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao salvar configurações de bônus:", error);
+      res.status(500).json({ 
+        message: "Erro ao salvar configurações de bônus",
+        error: error.message || "Erro desconhecido"
+      });
+    }
+  });
 
   /**
    * API para obter os bônus ativos do usuário
@@ -5375,8 +5413,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             // Atualizar diretamente o saldo de BÔNUS do usuário (não o saldo principal)
-            // Bônus criado com sucesso na tabela user_bonuses
-            console.log(`✅ Bônus de primeiro depósito criado: R$${bonusAmount.toFixed(2)}`);
+            await storage.updateUserBonusBalance(userId, bonusAmount);
+            console.log(`Saldo de BÔNUS do usuário atualizado com R$${bonusAmount.toFixed(2)}`);
             
             // Atualizar status da transação para completed
             const updatedTransaction = await storage.updateTransactionStatus(
@@ -6623,11 +6661,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               amount: transaction.amount,
               newBalance
             });
-
-            // 🎁 APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
-            if (transaction.type === 'deposit') {
-              await checkAndApplyFirstDepositBonus(user.id, transaction.amount);
-            }
           }
         }
       } else if (payload.type === 'withdrawal.completed') {
