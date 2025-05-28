@@ -233,14 +233,27 @@ export function DepositDialog({
     enabled: isOpen,
   });
   
-  // Buscar configurações específicas de bônus (via endpoint admin)
+  // Buscar configurações específicas de bônus
   const { data: bonusSettings = {} } = useQuery({
-    queryKey: ["/api/admin/bonus-settings"],
+    queryKey: ["/api/bonus-settings", isOpen], // Adiciona isOpen para invalidar cache quando abre
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/bonus-settings");
+      // Tentar primeiro endpoint admin (para administradores)
+      try {
+        const res = await apiRequest("GET", "/api/admin/bonus-settings");
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch (error) {
+        // Se falhar, usar endpoint público
+      }
+      
+      // Fallback para endpoint público
+      const res = await apiRequest("GET", "/api/bonus-settings");
       return await res.json();
     },
     enabled: isOpen,
+    staleTime: 0, // Força sempre buscar dados frescos
+    gcTime: 0, // Não manter em cache
   });
   
   // Console para debug das configurações de bônus
