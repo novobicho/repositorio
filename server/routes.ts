@@ -3687,7 +3687,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   // Atualizar saldo do usuário
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
-                  // Bônus será aplicado automaticamente pela lógica principal do webhook
+                  // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
+                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
                   
                   updatedCount++;
                   results.push({
