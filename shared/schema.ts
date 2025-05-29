@@ -367,6 +367,7 @@ export const paymentTransactions = pgTable("payment_transactions", {
   externalId: text("external_id"),
   externalUrl: text("external_url"),
   gatewayResponse: jsonb("gateway_response"),
+  metadata: jsonb("metadata"), // Campo para armazenar informações adicionais como solicitação de bônus
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
