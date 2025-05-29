@@ -5762,6 +5762,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { amount, description } = req.body;
       const user = req.user!;
       
+      // 🎁 Capturar a flag de bônus do frontend (CORREÇÃO CRÍTICA)
+      const useBonus = req.body.useBonus === true;
+      console.log(`[BÔNUS] EZZEBANK - Flag useBonus recebida: ${useBonus}`);
+      
       console.log('🏦 EZZEBANK: Iniciando criação de pagamento PIX:', {
         userId: user.id,
         amount,
@@ -5783,15 +5787,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         webhookUrl: `${process.env.WEBHOOK_URL || 'https://seu-dominio.com'}/api/ezzebank/webhook`
       });
 
-      // Criar transação no banco
+      // Buscar gateway EZZEBANK
+      const gateway = await storage.getPaymentGatewayByType('ezzebank');
+      if (!gateway) {
+        return res.status(404).json({ message: "Gateway EZZEBANK não encontrado" });
+      }
+
+      // Criar transação no banco (CORRIGIDO para incluir flag de bônus)
       await storage.createPaymentTransaction({
         userId: user.id,
         amount: Number(amount),
-        method: 'pix',
-        gateway: 'ezzebank',
-        gatewayTransactionId: payment.id,
         status: 'pending',
-        type: 'deposit'
+        type: 'deposit',
+        gatewayId: gateway.id,
+        externalId: payment.id,
+        metadata: { useBonus } // 🎁 CORREÇÃO CRÍTICA: Salvar flag de bônus
       });
 
       console.log('✅ EZZEBANK: Pagamento PIX criado com sucesso:', payment.id);
