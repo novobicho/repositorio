@@ -3483,8 +3483,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // 🎁 Função para verificar e aplicar bônus de primeiro depósito
-  async function checkAndApplyFirstDepositBonus(userId: number, depositAmount: number) {
+  async function checkAndApplyFirstDepositBonus(userId: number, depositAmount: number, userWantsBonus: boolean = false) {
     try {
+      console.log(`[BÔNUS] Verificando bônus - UserId: ${userId}, Valor: R$${depositAmount}, Usuário quer bônus: ${userWantsBonus}`);
+      
+      // PRIMEIRA VERIFICAÇÃO: Usuário deve ter marcado a opção de receber bônus
+      if (!userWantsBonus) {
+        console.log(`[BÔNUS] Usuário ${userId} não marcou a opção de receber bônus - não aplicando bônus`);
+        return;
+      }
+      
       // Verificar se o bônus de primeiro depósito está habilitado
       const settings = await storage.getSystemSettings();
       if (!settings?.firstDepositBonusEnabled) {
@@ -3548,6 +3556,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error(`[ERRO BÔNUS] Falha ao aplicar bônus de primeiro depósito para usuário ${userId}:`, error);
     }
   }
+
+  // Endpoint para aplicar bônus de primeiro depósito quando usuário escolhe receber
+  app.post("/api/apply-first-deposit-bonus", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { transactionId } = req.body;
+      
+      if (!transactionId) {
+        return res.status(400).json({ message: "ID da transação é obrigatório" });
+      }
+      
+      // Buscar a transação
+      const transaction = await storage.getPaymentTransaction(transactionId);
+      if (!transaction) {
+        return res.status(404).json({ message: "Transação não encontrada" });
+      }
+      
+      // Verificar se a transação pertence ao usuário
+      if (transaction.userId !== userId) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      
+      // Verificar se a transação está completa
+      if (transaction.status !== 'completed') {
+        return res.status(400).json({ message: "Transação deve estar completa para aplicar bônus" });
+      }
+      
+      // Aplicar bônus de primeiro depósito (com usuário explicitamente querendo o bônus)
+      await checkAndApplyFirstDepositBonus(userId, transaction.amount, true);
+      
+      res.json({ 
+        success: true, 
+        message: "Bônus de primeiro depósito aplicado com sucesso!" 
+      });
+      
+    } catch (error) {
+      console.error("Erro ao aplicar bônus de primeiro depósito:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
 
   // Verificar automaticamente pagamentos pendentes
   app.post("/api/payment-transactions/check-pending", requireAuth, async (req, res) => {
@@ -3687,7 +3735,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
                   // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
-                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
+                  // Por enquanto, não aplicar bônus automático até implementarmos a escolha do usuário
+                  // await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount, false);
                   
                   updatedCount++;
                   results.push({
