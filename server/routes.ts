@@ -3735,8 +3735,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
                   // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
-                  // Por enquanto, não aplicar bônus automático até implementarmos a escolha do usuário
-                  // await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount, false);
+                  // Verificar se a transação tem flag de uso de bônus
+                  const shouldApplyBonus = transaction.metadata && transaction.metadata.useBonus === true;
+                  console.log(`[BÔNUS] Verificando aplicação de bônus para transação ${transaction.id}: shouldApplyBonus=${shouldApplyBonus}`);
+                  
+                  if (shouldApplyBonus) {
+                    console.log(`[BÔNUS] Aplicando bônus de primeiro depósito para usuário ${transaction.userId}, valor R$${transaction.amount}`);
+                    await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount, true);
+                  }
                   
                   updatedCount++;
                   results.push({
@@ -4333,13 +4339,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Pushin Pay gateway is not available" });
       }
       
+      // Capturar a flag de bônus do frontend
+      const useBonus = req.body.useBonus === true;
+      console.log(`[BÔNUS] Flag useBonus recebida do frontend: ${useBonus}`);
+      
       // Create transaction record
       const transaction = await storage.createPaymentTransaction({
         userId,
         gatewayId: gateway.id,
         amount,
         status: "pending",
-        type: "deposit" // Especificar explicitamente que é um depósito
+        type: "deposit", // Especificar explicitamente que é um depósito
+        metadata: { useBonus } // Salvar a flag de bônus nos metadados da transação
       });
 
       try {
