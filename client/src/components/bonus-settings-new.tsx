@@ -34,13 +34,13 @@ export const BonusSettingsNew = () => {
       setLoading(true);
       try {
         console.log("Buscando configurações de bônus do sistema...");
-        const response = await fetch("/api/admin/settings", {
+        const response = await fetch("/api/admin/bonus-settings", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0"
+            // Certifica que o navegador envia os cookies de autenticação com a solicitação
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache"
           },
           credentials: "include"
         });
@@ -51,25 +51,22 @@ export const BonusSettingsNew = () => {
           const data = await response.json();
           console.log("Dados de bônus carregados:", data);
           
-          // CORREÇÃO: Mapear campos diretos do banco de dados
+          // Atualizar estado com dados do servidor, com validação para evitar valores inválidos
           setSignupBonus({
-            enabled: Boolean(data.signupBonusEnabled),
-            amount: isNaN(Number(data.signupBonusAmount)) ? 10 : Number(data.signupBonusAmount),
-            rollover: isNaN(Number(data.signupBonusRollover)) ? 3 : Number(data.signupBonusRollover),
-            expiration: isNaN(Number(data.signupBonusExpiration)) ? 7 : Number(data.signupBonusExpiration)
+            enabled: Boolean(data.signupBonus?.enabled),
+            amount: isNaN(Number(data.signupBonus?.amount)) ? 10 : Number(data.signupBonus?.amount),
+            rollover: isNaN(Number(data.signupBonus?.rollover)) ? 3 : Number(data.signupBonus?.rollover),
+            expiration: isNaN(Number(data.signupBonus?.expiration)) ? 7 : Number(data.signupBonus?.expiration)
           });
           
           setFirstDepositBonus({
-            enabled: Boolean(data.firstDepositBonusEnabled),
-            amount: isNaN(Number(data.firstDepositBonusAmount)) ? 100 : Number(data.firstDepositBonusAmount),
-            percentage: isNaN(Number(data.firstDepositBonusPercentage)) ? 100 : Number(data.firstDepositBonusPercentage),
-            maxAmount: isNaN(Number(data.firstDepositBonusMaxAmount)) ? 200 : Number(data.firstDepositBonusMaxAmount),
-            rollover: isNaN(Number(data.firstDepositBonusRollover)) ? 3 : Number(data.firstDepositBonusRollover),
-            expiration: isNaN(Number(data.firstDepositBonusExpiration)) ? 7 : Number(data.firstDepositBonusExpiration)
+            enabled: Boolean(data.firstDepositBonus?.enabled),
+            amount: isNaN(Number(data.firstDepositBonus?.amount)) ? 100 : Number(data.firstDepositBonus?.amount),
+            percentage: isNaN(Number(data.firstDepositBonus?.percentage)) ? 100 : Number(data.firstDepositBonus?.percentage),
+            maxAmount: isNaN(Number(data.firstDepositBonus?.maxAmount)) ? 200 : Number(data.firstDepositBonus?.maxAmount),
+            rollover: isNaN(Number(data.firstDepositBonus?.rollover)) ? 3 : Number(data.firstDepositBonus?.rollover),
+            expiration: isNaN(Number(data.firstDepositBonus?.expiration)) ? 7 : Number(data.firstDepositBonus?.expiration)
           });
-          
-          console.log("Estado atualizado - Signup Bonus:", Boolean(data.signupBonusEnabled));
-          console.log("Estado atualizado - First Deposit Bonus:", Boolean(data.firstDepositBonusEnabled));
           
           toast({
             title: "Configurações carregadas",
