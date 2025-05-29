@@ -3782,14 +3782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
                   // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
-                  // Verificar se a transação tem flag de uso de bônus
-                  const shouldApplyBonus = transaction.metadata && transaction.metadata.useBonus === true;
-                  console.log(`[BÔNUS] Verificando aplicação de bônus para transação ${transaction.id}: shouldApplyBonus=${shouldApplyBonus}`);
-                  
-                  if (shouldApplyBonus) {
-                    console.log(`[BÔNUS] Aplicando bônus de primeiro depósito para usuário ${transaction.userId}, valor R$${transaction.amount}`);
-                    await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount, true);
-                  }
+                  // REMOVIDO: Duplicação de aplicação de bônus - mantendo apenas o endpoint direto na linha 3634
                   
                   updatedCount++;
                   results.push({
@@ -5185,6 +5178,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('Buscando configurações de bônus para usuários...');
       
+      // Headers para FORÇAR dados sempre atualizados (sem cache)
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
       const settings = await storage.getSystemSettings();
       
       if (!settings) {
@@ -5192,43 +5190,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "System settings not found" });
       }
       
-      const defaultConfig = {
-        signupBonus: {
-          enabled: false,
-          amount: 15,
-          rollover: 2,
-          expiration: 7
-        },
-        firstDepositBonus: {
-          enabled: false,
-          amount: 100,
-          percentage: 100,
-          maxAmount: 300,
-          rollover: 2,
-          expiration: 14
-        },
-        promotionalBanners: {
-          enabled: false
-        }
-      };
-      
+      // Usar EXCLUSIVAMENTE os valores do banco de dados para permitir alterações em tempo real
       const response = {
         signupBonus: {
-          enabled: settings?.signupBonusEnabled ?? defaultConfig.signupBonus.enabled,
-          amount: Number(settings?.signupBonusAmount ?? defaultConfig.signupBonus.amount),
-          rollover: Number(settings?.signupBonusRollover ?? defaultConfig.signupBonus.rollover),
-          expiration: Number(settings?.signupBonusExpiration ?? defaultConfig.signupBonus.expiration)
+          enabled: Boolean(settings.signupBonusEnabled),
+          amount: Number(settings.signupBonusAmount || 0),
+          rollover: Number(settings.signupBonusRollover || 0),
+          expiration: Number(settings.signupBonusExpiration || 0)
         },
         firstDepositBonus: {
-          enabled: settings?.firstDepositBonusEnabled ?? false,
-          amount: Number(settings?.firstDepositBonusAmount ?? defaultConfig.firstDepositBonus.amount),
-          percentage: Number(settings?.firstDepositBonusPercentage ?? defaultConfig.firstDepositBonus.percentage),
-          maxAmount: Number(settings?.firstDepositBonusMaxAmount ?? defaultConfig.firstDepositBonus.maxAmount),
-          rollover: Number(settings?.firstDepositBonusRollover ?? defaultConfig.firstDepositBonus.rollover),
-          expiration: Number(settings?.firstDepositBonusExpiration ?? defaultConfig.firstDepositBonus.expiration)
+          enabled: Boolean(settings.firstDepositBonusEnabled),
+          amount: Number(settings.firstDepositBonusAmount || 0),
+          percentage: Number(settings.firstDepositBonusPercentage || 0),
+          maxAmount: Number(settings.firstDepositBonusMaxAmount || 0),
+          rollover: Number(settings.firstDepositBonusRollover || 0),
+          expiration: Number(settings.firstDepositBonusExpiration || 0)
         },
         promotionalBanners: {
-          enabled: settings?.promotionalBannersEnabled ?? false
+          enabled: Boolean(settings.promotionalBannersEnabled)
         }
       };
       
