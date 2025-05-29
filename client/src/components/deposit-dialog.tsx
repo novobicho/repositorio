@@ -148,16 +148,6 @@ export function DepositDialog({
     enabled: isOpen,
   });
 
-  // Verificar elegibilidade para bônus de primeiro depósito
-  const { data: bonusEligibility } = useQuery({
-    queryKey: ["/api/bonus/first-deposit/eligibility"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/bonus/first-deposit/eligibility");
-      return await res.json();
-    },
-    enabled: isOpen,
-  });
-
   // Configuração do formulário com Zod Resolver
   const form = useForm<DepositFormValues>({
     resolver: zodResolver(depositFormSchema),
@@ -506,46 +496,6 @@ export function DepositDialog({
       gatewayId: parseInt(values.gatewayId),
       useBonus: values.useBonus
     });
-    
-    // Se o usuário solicitou bônus, iniciar verificação automática
-    if (values.useBonus) {
-      setTimeout(() => {
-        startPendingTransactionCheck();
-      }, 5000);
-    }
-  };
-
-  // Função para verificar transações pendentes automaticamente
-  const startPendingTransactionCheck = () => {
-    const checkInterval = setInterval(async () => {
-      try {
-        const response = await apiRequest("POST", "/api/payment-transactions/check-pending");
-        const result = await response.json();
-        
-        console.log("Verificação automática de transações:", result);
-        
-        // Se alguma transação foi atualizada, parar de verificar
-        if (result.updatedCount > 0) {
-          clearInterval(checkInterval);
-          toast({
-            title: "Depósito confirmado!",
-            description: "Seu depósito foi processado com sucesso",
-            duration: 5000
-          });
-          
-          // Recarregar dados do usuário
-          queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/user/bonus-balance"] });
-        }
-      } catch (error) {
-        console.error("Erro ao verificar transações:", error);
-      }
-    }, 10000); // Verificar a cada 10 segundos
-    
-    // Parar de verificar após 5 minutos
-    setTimeout(() => {
-      clearInterval(checkInterval);
-    }, 300000);
   };
 
   // Handler para entrada numérica do teclado
@@ -1000,7 +950,7 @@ export function DepositDialog({
           />
           
           {/* Opção de bônus de primeiro depósito - só aparece se for elegível */}
-          {bonusEligibility?.eligible && (
+          {bonusEnabled && (
             <FormField
               control={form.control}
               name="useBonus"
@@ -1061,61 +1011,6 @@ export function DepositDialog({
               onClick={() => setIsOpen(false)}
             >
               Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={async () => {
-                try {
-                  const res = await apiRequest("POST", "/api/bonus/test-first-deposit", { amount: 10 });
-                  const result = await res.json();
-                  toast({
-                    title: "Teste de bônus executado",
-                    description: "Verifique os logs do servidor e seu saldo de bônus"
-                  });
-                } catch (error) {
-                  toast({
-                    title: "Erro no teste",
-                    description: "Falha ao executar teste de bônus",
-                    variant: "destructive"
-                  });
-                }
-              }}
-            >
-              Testar Bônus
-            </Button>
-            <Button
-              type="button"
-              variant="default"
-              onClick={async () => {
-                try {
-                  const res = await apiRequest("POST", "/api/bonus/apply-to-completed");
-                  const result = await res.json();
-                  
-                  if (result.success) {
-                    toast({
-                      title: "Bônus aplicado com sucesso",
-                      description: `${result.bonusApplied} bônus aplicado(s) em ${result.transactionsChecked} transação(ões) verificada(s)`
-                    });
-                    // Recarregar dados
-                    queryClient.invalidateQueries({ queryKey: ["/api/user/bonus-balance"] });
-                    queryClient.invalidateQueries({ queryKey: ["/api/user/bonuses"] });
-                  } else {
-                    toast({
-                      title: "Nenhum bônus aplicado",
-                      description: result.message || "Não foram encontradas transações elegíveis para bônus"
-                    });
-                  }
-                } catch (error) {
-                  toast({
-                    title: "Erro ao aplicar bônus",
-                    description: "Falha ao processar transações completed",
-                    variant: "destructive"
-                  });
-                }
-              }}
-            >
-              Aplicar Bônus
             </Button>
             <Button
               type="submit"
