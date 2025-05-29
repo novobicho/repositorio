@@ -270,8 +270,12 @@ export function DepositDialog({
   });
   
   // Determinar se o usuário é elegível para o bônus de primeiro depósito
-  const isFirstDeposit = depositHistory.length === 0;
-  console.log('Deposit history:', depositHistory.length === 0 ? 'Primeiro depósito' : `Já fez ${depositHistory.length} depósitos`);
+  // Contar apenas depósitos que foram completados com sucesso
+  const completedDeposits = depositHistory.filter((transaction: any) => 
+    transaction.type === 'deposit' && transaction.status === 'completed'
+  );
+  const isFirstDeposit = completedDeposits.length === 0;
+  console.log('Deposit history:', completedDeposits.length === 0 ? 'Primeiro depósito' : `Já fez ${completedDeposits.length} depósitos completos`);
   console.log('System settings:', {
     firstDepositBonusEnabled: systemSettings?.firstDepositBonusEnabled,
     firstDepositBonusPercentage: systemSettings?.firstDepositBonusPercentage,
@@ -431,6 +435,32 @@ export function DepositDialog({
     }
   });
 
+  // Mutação para aplicar bônus de primeiro depósito
+  const applyBonusMutation = useMutation({
+    mutationFn: async (transactionId: number) => {
+      const res = await apiRequest("POST", "/api/apply-first-deposit-bonus", { transactionId });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        toast({
+          title: "🎁 Bônus Aplicado!",
+          description: data.message,
+          variant: "default",
+          duration: 5000,
+        });
+        
+        // Invalidar cache para atualizar saldos
+        queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/bonus-balance'] });
+      }
+    },
+    onError: (error: any) => {
+      console.log("Erro ao aplicar bônus:", error.message);
+      // Não mostrar erro para o usuário se o bônus falhar - pode ser que já foi aplicado
+    }
+  });
+
   // Mutação para verificar pagamento manualmente
   const checkPaymentMutation = useMutation({
     mutationFn: async (transactionId: number) => {
@@ -439,6 +469,9 @@ export function DepositDialog({
     },
     onSuccess: (data) => {
       if (data.credited) {
+        // Verificar se o usuário escolheu receber bônus
+        const wantsBonus = form.getValues("useBonus");
+        
         // Pop-up de sucesso mais visível
         toast({
           title: "🎉 Depósito Confirmado!",
@@ -446,6 +479,12 @@ export function DepositDialog({
           variant: "default",
           duration: 8000, // 8 segundos para dar tempo de ler
         });
+        
+        // Se o usuário marcou para receber bônus, aplicar o bônus
+        if (wantsBonus && data.transactionId) {
+          console.log("Usuário escolheu receber bônus - aplicando...");
+          applyBonusMutation.mutate(data.transactionId);
+        }
         
         // Invalidar cache do usuário para atualizar saldo
         queryClient.invalidateQueries({ queryKey: ['/api/user'] });
@@ -949,59 +988,81 @@ export function DepositDialog({
             )}
           />
           
-          {/* Opção de bônus de primeiro depósito - só aparece se for elegível */}
+          {/* Seção de bônus de primeiro depósito */}
           {bonusEnabled && (
-            <FormField
-              control={form.control}
-              name="useBonus"
-              render={({ field }) => {
-                // Obter valores reais das configurações
-                const bonusPercentage = bonusSettings?.firstDepositBonus?.percentage || 
-                                      systemSettings?.firstDepositBonusPercentage || 
-                                      125;
-                const bonusMaxAmount = bonusSettings?.firstDepositBonus?.maxAmount || 
-                                     systemSettings?.firstDepositBonusMaxAmount || 
-                                     300;
-                
-                return (
-                  <FormItem className="mt-4">
-                    <div className="relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-r from-primary/5 to-purple-500/5 p-4">
-                      <div className="flex items-start space-x-3">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            className="mt-0.5"
-                          />
-                        </FormControl>
-                        <div className="flex-1 space-y-2">
-                          <FormLabel className="text-base font-semibold text-primary">
-                            🎁 Bônus de Primeiro Depósito
-                          </FormLabel>
-                          
-                          <div className="text-sm text-muted-foreground">
-                            Ganhe <span className="font-bold text-primary">{Number(bonusPercentage)}%</span> de bônus 
-                            até <span className="font-bold text-primary">R$ {Number(bonusMaxAmount).toFixed(2).replace(".", ",")}</span>
-                          </div>
-                          
-                          {currentBonusAmount > 0 && (
-                            <div className="flex items-center gap-2 pt-1">
-                              <div className="text-lg font-bold text-green-600">
-                                +R$ {currentBonusAmount.toFixed(2).replace(".", ",")}
-                              </div>
-                              <div className="text-xs text-green-600/80">de bônus</div>
+            isFirstDeposit ? (
+              <FormField
+                control={form.control}
+                name="useBonus"
+                render={({ field }) => {
+                  // Obter valores reais das configurações
+                  const bonusPercentage = bonusSettings?.firstDepositBonus?.percentage || 
+                                        systemSettings?.firstDepositBonusPercentage || 
+                                        125;
+                  const bonusMaxAmount = bonusSettings?.firstDepositBonus?.maxAmount || 
+                                       systemSettings?.firstDepositBonusMaxAmount || 
+                                       300;
+                  
+                  return (
+                    <FormItem className="mt-4">
+                      <div className="relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-r from-primary/5 to-purple-500/5 p-4">
+                        <div className="flex items-start space-x-3">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              className="mt-0.5"
+                            />
+                          </FormControl>
+                          <div className="flex-1 space-y-2">
+                            <FormLabel className="text-base font-semibold text-primary">
+                              🎁 Bônus de Primeiro Depósito
+                            </FormLabel>
+                            
+                            <div className="text-sm text-muted-foreground">
+                              Ganhe <span className="font-bold text-primary">{Number(bonusPercentage)}%</span> de bônus 
+                              até <span className="font-bold text-primary">R$ {Number(bonusMaxAmount).toFixed(2).replace(".", ",")}</span>
                             </div>
-                          )}
+                            
+                            {currentBonusAmount > 0 && (
+                              <div className="flex items-center gap-2 pt-1">
+                                <div className="text-lg font-bold text-green-600">
+                                  +R$ {currentBonusAmount.toFixed(2).replace(".", ",")}
+                                </div>
+                                <div className="text-xs text-green-600/80">de bônus</div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      <div className="text-xs text-amber-600 mt-2">
+                        Rollover de <span className="font-semibold">2x</span> necessário para saque.
+                      </div>
+                    </FormItem>
+                  );
+                }}
+              />
+            ) : (
+              // Mensagem para usuários que já utilizaram o bônus
+              <div className="mt-4">
+                <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-4 opacity-60">
+                  <div className="flex items-start space-x-3">
+                    <div className="mt-0.5 h-4 w-4 rounded border border-gray-300 bg-gray-100"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="text-base font-semibold text-gray-500">
+                        🎁 Bônus de Primeiro Depósito
+                      </div>
+                      <div className="text-sm text-gray-400">
+                        Você já utilizou seu bônus de primeiro depósito em uma transação anterior.
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Este bônus é concedido apenas uma vez por conta.
+                      </div>
                     </div>
-                    <div className="text-xs text-amber-600 mt-2">
-                      Rollover de <span className="font-semibold">2x</span> necessário para saque.
-                    </div>
-                  </FormItem>
-                );
-              }}
-            />
+                  </div>
+                </div>
+              </div>
+            )
           )}
 
           <DialogFooter className="mt-6">
