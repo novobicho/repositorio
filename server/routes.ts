@@ -3372,6 +3372,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // CORREÇÃO CRÍTICA: Endpoint específico para verificar depósitos do usuário
+  // Este endpoint é usado pelo frontend para verificar elegibilidade para bônus
+  app.get("/api/transactions/deposits", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const username = req.user!.username;
+      console.log(`🔍🔍🔍 ENDPOINT DEPOSITS EXECUTADO: Usuário ${username} (${userId})`);
+      console.log(`🔍 VERIFICAÇÃO BÔNUS: Consultando depósitos do usuário ${username} (${userId}) para elegibilidade`);
+      
+      // Buscar apenas transações de depósito com status 'completed'
+      const deposits = await storage.getUserTransactions(userId);
+      console.log(`🔍 TOTAL TRANSAÇÕES: Usuário ${username} tem ${deposits.length} transações no total`);
+      
+      // Verificar cada transação individualmente
+      deposits.forEach((transaction, index) => {
+        console.log(`🔍 TRANSAÇÃO ${index + 1}: ID=${transaction.id}, Tipo=${transaction.type}, Status=${transaction.status}, Amount=${transaction.amount}`);
+      });
+      
+      const completedDeposits = deposits.filter(transaction => {
+        const isDeposit = transaction.type === 'deposit';
+        const isCompleted = transaction.status === 'completed';
+        console.log(`🔍 FILTRO: ID=${transaction.id} -> IsDeposit=${isDeposit}, IsCompleted=${isCompleted}, Passou=${isDeposit && isCompleted}`);
+        return isDeposit && isCompleted;
+      });
+      
+      console.log(`📊 RESULTADO FINAL: Usuário ${username} (${userId}) tem ${completedDeposits.length} depósitos confirmados`);
+      console.log(`✅ ELEGÍVEL PARA BÔNUS: ${completedDeposits.length === 0 ? 'SIM' : 'NÃO'}`);
+      
+      if (completedDeposits.length > 0) {
+        console.log(`🔒 BÔNUS BLOQUEADO: Usuário ${username} já utilizou o bônus de primeiro depósito`);
+      } else {
+        console.log(`✅ BÔNUS DISPONÍVEL: Usuário ${username} é elegível para bônus de primeiro depósito`);
+      }
+      
+      console.log(`🚀 RETORNANDO: ${completedDeposits.length} depósitos para o frontend`);
+      res.json(completedDeposits);
+    } catch (error) {
+      console.error("❌ ERRO CRÍTICO ao buscar depósitos para verificação de bônus:", error);
+      res.status(500).json({ message: "Erro ao verificar histórico de depósitos" });
+    }
+  });
+
   // Get user payment transactions
   /**
    * Obter todas as transações de pagamento do usuário autenticado 
