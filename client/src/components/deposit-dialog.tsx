@@ -148,6 +148,16 @@ export function DepositDialog({
     enabled: isOpen,
   });
 
+  // Verificar elegibilidade para bônus de primeiro depósito
+  const { data: bonusEligibility } = useQuery({
+    queryKey: ["/api/bonus/first-deposit/eligibility"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/bonus/first-deposit/eligibility");
+      return await res.json();
+    },
+    enabled: isOpen,
+  });
+
   // Configuração do formulário com Zod Resolver
   const form = useForm<DepositFormValues>({
     resolver: zodResolver(depositFormSchema),
@@ -259,47 +269,19 @@ export function DepositDialog({
   // Console para debug das configurações de bônus
   console.log("Bonus settings (admin):", bonusSettings);
 
-  // Verificar se é o primeiro depósito do usuário usando o endpoint correto
-  const { data: allPaymentTransactions = [] } = useQuery({
-    queryKey: ["/api/payment-transactions"],
+  // Verificar se é o primeiro depósito do usuário
+  const { data: depositHistory = [] } = useQuery({
+    queryKey: ["/api/transactions/deposits"],
     queryFn: async () => {
-      console.log("🔍 FRONTEND: Fazendo chamada para /api/payment-transactions");
-      const res = await apiRequest("GET", "/api/payment-transactions");
-      const data = await res.json();
-      console.log("🔍 FRONTEND: Dados recebidos do servidor:", data);
-      console.log("🔍 FRONTEND: Tipo dos dados:", Array.isArray(data) ? 'array' : typeof data);
-      console.log("🔍 FRONTEND: Quantidade de itens:", Array.isArray(data) ? data.length : 'não é array');
-      return data;
+      const res = await apiRequest("GET", "/api/transactions/deposits");
+      return await res.json();
     },
     enabled: isOpen,
   });
   
-  // Filtrar apenas os depósitos das transações de pagamento
-  const depositHistory = allPaymentTransactions.filter((transaction: any) => 
-    transaction.type === 'deposit'
-  );
-  
   // Determinar se o usuário é elegível para o bônus de primeiro depósito
-  // Contar apenas depósitos que foram completados com sucesso
-  console.log("🔍 FRONTEND: depositHistory completo:", depositHistory);
-  const completedDeposits = depositHistory.filter((transaction: any) => {
-    console.log(`🔍 TRANSAÇÃO: ID=${transaction.id}, Tipo=${transaction.type}, Status=${transaction.status}`);
-    return transaction.type === 'deposit' && transaction.status === 'completed';
-  });
-  const isFirstDeposit = completedDeposits.length === 0;
-  
-  console.log("🔍 FRONTEND: Depósitos completados encontrados:", completedDeposits);
-  console.log("🔍 FRONTEND: Quantidade de depósitos completados:", completedDeposits.length);
-  
-  // CORREÇÃO: Se já tem depósitos completados, não é elegível para bônus de primeiro depósito
-  console.log(`🔍 ELEGIBILIDADE BÔNUS: Usuário tem ${completedDeposits.length} depósitos completos`);
-  console.log(`🎯 É PRIMEIRO DEPÓSITO: ${isFirstDeposit ? 'SIM' : 'NÃO'}`);
-  
-  if (!isFirstDeposit) {
-    console.log(`❌ USUÁRIO NÃO ELEGÍVEL: Já realizou ${completedDeposits.length} depósito(s) anteriormente`);
-    console.log(`🔒 BÔNUS JÁ UTILIZADO: Este usuário não pode mais usar bônus de primeiro depósito`);
-  }
-  console.log('Deposit history:', completedDeposits.length === 0 ? 'Primeiro depósito' : `Já fez ${completedDeposits.length} depósitos completos`);
+  const isFirstDeposit = depositHistory.length === 0;
+  console.log('Deposit history:', depositHistory.length === 0 ? 'Primeiro depósito' : `Já fez ${depositHistory.length} depósitos`);
   console.log('System settings:', {
     firstDepositBonusEnabled: systemSettings?.firstDepositBonusEnabled,
     firstDepositBonusPercentage: systemSettings?.firstDepositBonusPercentage,
@@ -387,18 +369,7 @@ export function DepositDialog({
   
   // Determinar se o bônus deve ser exibido com base nas configurações do sistema
   // e no histórico de depósitos do usuário
-  // CORREÇÃO: Verificar as configurações de bônus dos settings ou bonusSettings
-  const firstDepositBonusEnabled = 
-    systemSettings?.firstDepositBonusEnabled === true || 
-    bonusSettings?.firstDepositBonus?.enabled === true;
-  
-  // CORREÇÃO CRÍTICA: O bônus só deve aparecer se está habilitado E é primeiro depósito
-  const bonusEnabled = firstDepositBonusEnabled && isFirstDeposit;
-  
-  console.log(`🎛️ CONFIGURAÇÃO BÔNUS NO SISTEMA: ${systemSettings?.firstDepositBonusEnabled}`);
-  console.log(`🎛️ CONFIGURAÇÃO BÔNUS NOS BONUS SETTINGS: ${bonusSettings?.firstDepositBonus?.enabled}`);
-  console.log(`🎯 É PRIMEIRO DEPÓSITO: ${isFirstDeposit}`);
-  console.log(`✅ BÔNUS HABILITADO PARA EXIBIÇÃO: ${bonusEnabled ? 'SIM' : 'NÃO'}`);
+  const bonusEnabled = systemSettings?.firstDepositBonusEnabled !== false && isFirstDeposit;
 
   // Mutation para criar uma transação de depósito
   const depositMutation = useMutation({
@@ -470,32 +441,6 @@ export function DepositDialog({
     }
   });
 
-  // Mutação para aplicar bônus de primeiro depósito
-  const applyBonusMutation = useMutation({
-    mutationFn: async (transactionId: number) => {
-      const res = await apiRequest("POST", "/api/apply-first-deposit-bonus", { transactionId });
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      if (data.success) {
-        toast({
-          title: "🎁 Bônus Aplicado!",
-          description: data.message,
-          variant: "default",
-          duration: 5000,
-        });
-        
-        // Invalidar cache para atualizar saldos
-        queryClient.invalidateQueries({ queryKey: ['/api/user'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/bonus-balance'] });
-      }
-    },
-    onError: (error: any) => {
-      console.log("Erro ao aplicar bônus:", error.message);
-      // Não mostrar erro para o usuário se o bônus falhar - pode ser que já foi aplicado
-    }
-  });
-
   // Mutação para verificar pagamento manualmente
   const checkPaymentMutation = useMutation({
     mutationFn: async (transactionId: number) => {
@@ -504,9 +449,6 @@ export function DepositDialog({
     },
     onSuccess: (data) => {
       if (data.credited) {
-        // Verificar se o usuário escolheu receber bônus
-        const wantsBonus = form.getValues("useBonus");
-        
         // Pop-up de sucesso mais visível
         toast({
           title: "🎉 Depósito Confirmado!",
@@ -514,12 +456,6 @@ export function DepositDialog({
           variant: "default",
           duration: 8000, // 8 segundos para dar tempo de ler
         });
-        
-        // Se o usuário marcou para receber bônus, aplicar o bônus
-        if (wantsBonus && data.transactionId) {
-          console.log("Usuário escolheu receber bônus - aplicando...");
-          applyBonusMutation.mutate(data.transactionId);
-        }
         
         // Invalidar cache do usuário para atualizar saldo
         queryClient.invalidateQueries({ queryKey: ['/api/user'] });
@@ -570,6 +506,46 @@ export function DepositDialog({
       gatewayId: parseInt(values.gatewayId),
       useBonus: values.useBonus
     });
+    
+    // Se o usuário solicitou bônus, iniciar verificação automática
+    if (values.useBonus) {
+      setTimeout(() => {
+        startPendingTransactionCheck();
+      }, 5000);
+    }
+  };
+
+  // Função para verificar transações pendentes automaticamente
+  const startPendingTransactionCheck = () => {
+    const checkInterval = setInterval(async () => {
+      try {
+        const response = await apiRequest("POST", "/api/payment-transactions/check-pending");
+        const result = await response.json();
+        
+        console.log("Verificação automática de transações:", result);
+        
+        // Se alguma transação foi atualizada, parar de verificar
+        if (result.updatedCount > 0) {
+          clearInterval(checkInterval);
+          toast({
+            title: "Depósito confirmado!",
+            description: "Seu depósito foi processado com sucesso",
+            duration: 5000
+          });
+          
+          // Recarregar dados do usuário
+          queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/user/bonus-balance"] });
+        }
+      } catch (error) {
+        console.error("Erro ao verificar transações:", error);
+      }
+    }, 10000); // Verificar a cada 10 segundos
+    
+    // Parar de verificar após 5 minutos
+    setTimeout(() => {
+      clearInterval(checkInterval);
+    }, 300000);
   };
 
   // Handler para entrada numérica do teclado
@@ -1023,81 +999,59 @@ export function DepositDialog({
             )}
           />
           
-          {/* Seção de bônus de primeiro depósito */}
-          {firstDepositBonusEnabled && (
-            isFirstDeposit ? (
-              <FormField
-                control={form.control}
-                name="useBonus"
-                render={({ field }) => {
-                  // Obter valores reais das configurações
-                  const bonusPercentage = bonusSettings?.firstDepositBonus?.percentage || 
-                                        systemSettings?.firstDepositBonusPercentage || 
-                                        125;
-                  const bonusMaxAmount = bonusSettings?.firstDepositBonus?.maxAmount || 
-                                       systemSettings?.firstDepositBonusMaxAmount || 
-                                       300;
-                  
-                  return (
-                    <FormItem className="mt-4">
-                      <div className="relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-r from-primary/5 to-purple-500/5 p-4">
-                        <div className="flex items-start space-x-3">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="mt-0.5"
-                            />
-                          </FormControl>
-                          <div className="flex-1 space-y-2">
-                            <FormLabel className="text-base font-semibold text-primary">
-                              🎁 Bônus de Primeiro Depósito
-                            </FormLabel>
-                            
-                            <div className="text-sm text-muted-foreground">
-                              Ganhe <span className="font-bold text-primary">{Number(bonusPercentage)}%</span> de bônus 
-                              até <span className="font-bold text-primary">R$ {Number(bonusMaxAmount).toFixed(2).replace(".", ",")}</span>
-                            </div>
-                            
-                            {currentBonusAmount > 0 && (
-                              <div className="flex items-center gap-2 pt-1">
-                                <div className="text-lg font-bold text-green-600">
-                                  +R$ {currentBonusAmount.toFixed(2).replace(".", ",")}
-                                </div>
-                                <div className="text-xs text-green-600/80">de bônus</div>
-                              </div>
-                            )}
+          {/* Opção de bônus de primeiro depósito - só aparece se for elegível */}
+          {bonusEligibility?.eligible && (
+            <FormField
+              control={form.control}
+              name="useBonus"
+              render={({ field }) => {
+                // Obter valores reais das configurações
+                const bonusPercentage = bonusSettings?.firstDepositBonus?.percentage || 
+                                      systemSettings?.firstDepositBonusPercentage || 
+                                      125;
+                const bonusMaxAmount = bonusSettings?.firstDepositBonus?.maxAmount || 
+                                     systemSettings?.firstDepositBonusMaxAmount || 
+                                     300;
+                
+                return (
+                  <FormItem className="mt-4">
+                    <div className="relative overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-r from-primary/5 to-purple-500/5 p-4">
+                      <div className="flex items-start space-x-3">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className="mt-0.5"
+                          />
+                        </FormControl>
+                        <div className="flex-1 space-y-2">
+                          <FormLabel className="text-base font-semibold text-primary">
+                            🎁 Bônus de Primeiro Depósito
+                          </FormLabel>
+                          
+                          <div className="text-sm text-muted-foreground">
+                            Ganhe <span className="font-bold text-primary">{Number(bonusPercentage)}%</span> de bônus 
+                            até <span className="font-bold text-primary">R$ {Number(bonusMaxAmount).toFixed(2).replace(".", ",")}</span>
                           </div>
+                          
+                          {currentBonusAmount > 0 && (
+                            <div className="flex items-center gap-2 pt-1">
+                              <div className="text-lg font-bold text-green-600">
+                                +R$ {currentBonusAmount.toFixed(2).replace(".", ",")}
+                              </div>
+                              <div className="text-xs text-green-600/80">de bônus</div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="text-xs text-amber-600 mt-2">
-                        Rollover de <span className="font-semibold">2x</span> necessário para saque.
-                      </div>
-                    </FormItem>
-                  );
-                }}
-              />
-            ) : (
-              // Mensagem para usuários que já utilizaram o bônus
-              <div className="mt-4">
-                <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-4 opacity-60">
-                  <div className="flex items-start space-x-3">
-                    <div className="mt-0.5 h-4 w-4 rounded border border-gray-300 bg-gray-100"></div>
-                    <div className="flex-1 space-y-2">
-                      <div className="text-base font-semibold text-gray-500">
-                        🎁 Bônus de Primeiro Depósito
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        Você já utilizou seu bônus de primeiro depósito em uma transação anterior.
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Este bônus é concedido apenas uma vez por conta.
-                      </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            )
+                    <div className="text-xs text-amber-600 mt-2">
+                      Rollover de <span className="font-semibold">2x</span> necessário para saque.
+                    </div>
+                  </FormItem>
+                );
+              }}
+            />
           )}
 
           <DialogFooter className="mt-6">
@@ -1107,6 +1061,61 @@ export function DepositDialog({
               onClick={() => setIsOpen(false)}
             >
               Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const res = await apiRequest("POST", "/api/bonus/test-first-deposit", { amount: 10 });
+                  const result = await res.json();
+                  toast({
+                    title: "Teste de bônus executado",
+                    description: "Verifique os logs do servidor e seu saldo de bônus"
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Erro no teste",
+                    description: "Falha ao executar teste de bônus",
+                    variant: "destructive"
+                  });
+                }
+              }}
+            >
+              Testar Bônus
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              onClick={async () => {
+                try {
+                  const res = await apiRequest("POST", "/api/bonus/apply-to-completed");
+                  const result = await res.json();
+                  
+                  if (result.success) {
+                    toast({
+                      title: "Bônus aplicado com sucesso",
+                      description: `${result.bonusApplied} bônus aplicado(s) em ${result.transactionsChecked} transação(ões) verificada(s)`
+                    });
+                    // Recarregar dados
+                    queryClient.invalidateQueries({ queryKey: ["/api/user/bonus-balance"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/user/bonuses"] });
+                  } else {
+                    toast({
+                      title: "Nenhum bônus aplicado",
+                      description: result.message || "Não foram encontradas transações elegíveis para bônus"
+                    });
+                  }
+                } catch (error) {
+                  toast({
+                    title: "Erro ao aplicar bônus",
+                    description: "Falha ao processar transações completed",
+                    variant: "destructive"
+                  });
+                }
+              }}
+            >
+              Aplicar Bônus
             </Button>
             <Button
               type="submit"
