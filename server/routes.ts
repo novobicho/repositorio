@@ -2837,6 +2837,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (dbSettings.favicon_url) settings.faviconUrl = dbSettings.favicon_url;
         }
         
+        // CORREÇÃO CRÍTICA: Garantir que as configurações de bônus sejam sempre retornadas
+        console.log(`🔧 CORRIGINDO CONFIGURAÇÕES DE BÔNUS para /api/system-settings`);
+        console.log(`✅ Bônus primeiro depósito habilitado: ${settings.firstDepositBonusEnabled}`);
+        console.log(`✅ Percentual do bônus: ${settings.firstDepositBonusPercentage}%`);
+        
         res.json(settings);
       } else {
         // Default values
