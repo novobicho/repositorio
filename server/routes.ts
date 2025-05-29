@@ -3483,20 +3483,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // 🎁 Função para verificar e aplicar bônus de primeiro depósito
-  async function checkAndApplyFirstDepositBonus(userId: number, depositAmount: number, userRequestedBonus: boolean = false) {
+  async function checkAndApplyFirstDepositBonus(userId: number, depositAmount: number) {
     try {
-      console.log(`\n=== INÍCIO DA FUNÇÃO checkAndApplyFirstDepositBonus ===`);
-      console.log(`Parâmetros recebidos:`);
-      console.log(`- userId: ${userId} (tipo: ${typeof userId})`);
-      console.log(`- depositAmount: ${depositAmount} (tipo: ${typeof depositAmount})`);
-      console.log(`- userRequestedBonus: ${userRequestedBonus} (tipo: ${typeof userRequestedBonus})`);
-      
-      // Verificar se o usuário solicitou o bônus
-      if (!userRequestedBonus) {
-        console.log(`[BÔNUS] Usuário ${userId} não solicitou bônus de primeiro depósito`);
-        return;
-      }
-
       // Verificar se o bônus de primeiro depósito está habilitado
       const settings = await storage.getSystemSettings();
       if (!settings?.firstDepositBonusEnabled) {
@@ -3522,20 +3510,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rollover = settings.firstDepositBonusRollover || 3;
       const expirationDays = settings.firstDepositBonusExpiration || 7;
 
-      console.log(`\n=== CÁLCULO DE BÔNUS DETALHADO ===`);
-      console.log(`Valor do depósito recebido: R$ ${depositAmount}`);
-      console.log(`Porcentagem de bônus: ${bonusPercentage}%`);
-      console.log(`Valor máximo permitido: R$ ${maxBonusAmount}`);
-
       let bonusAmount = (depositAmount * bonusPercentage) / 100;
-      console.log(`Valor calculado antes do limite: R$ ${bonusAmount}`);
-      
       if (bonusAmount > maxBonusAmount) {
-        console.log(`Aplicando limite máximo: R$ ${maxBonusAmount}`);
         bonusAmount = maxBonusAmount;
       }
-      
-      console.log(`Valor final do bônus: R$ ${bonusAmount}`);
 
       if (bonusAmount <= 0) {
         console.log(`[BÔNUS] Valor de bônus calculado é R$${bonusAmount}. Não aplicando bônus.`);
@@ -3709,36 +3687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   await storage.updateUserBalance(transaction.userId, transaction.amount);
                   
                   // 🎁 VERIFICAR E APLICAR BÔNUS DE PRIMEIRO DEPÓSITO
-                  // Verificar se o usuário solicitou bônus nos metadados da transação
-                  let bonusRequested = false;
-                  try {
-                    const transactionWithMetadata = await db
-                      .select()
-                      .from(paymentTransactions)
-                      .where(eq(paymentTransactions.id, transaction.id))
-                      .limit(1);
-                    
-                    if (transactionWithMetadata[0]?.metadata) {
-                      const metadata = typeof transactionWithMetadata[0].metadata === 'string' 
-                        ? JSON.parse(transactionWithMetadata[0].metadata) 
-                        : transactionWithMetadata[0].metadata;
-                      bonusRequested = metadata?.bonusRequested === true;
-                    }
-                  } catch (error) {
-                    console.log(`Erro ao verificar metadados da transação ${transaction.id}:`, error);
-                  }
-                  
-                  console.log(`\n=== VERIFICAÇÃO DE BÔNUS PARA TRANSAÇÃO ${transaction.id} ===`);
-                  console.log(`Usuário: ${userV2.username} (${transaction.userId})`);
-                  console.log(`Valor: R$ ${transaction.amount}`);
-                  console.log(`Bônus solicitado: ${bonusRequested ? 'SIM' : 'NÃO'}`);
-                  
-                  if (bonusRequested) {
-                    console.log(`Aplicando bônus de primeiro depósito...`);
-                    await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount, true);
-                  } else {
-                    console.log(`Usuário não solicitou bônus, aplicação ignorada.`);
-                  }
+                  await checkAndApplyFirstDepositBonus(transaction.userId, transaction.amount);
                   
                   updatedCount++;
                   results.push({
@@ -4282,15 +4231,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extrair o userId do usuário autenticado - NUNCA do corpo da requisição
       const userId = req.user!.id;
       
-      console.log(`\n=== INÍCIO DEPÓSITO PUSHIN PAY ===`);
-      console.log(`Usuário: ${req.user!.username} (ID: ${userId})`);
-      console.log(`Dados recebidos no body:`, JSON.stringify(req.body, null, 2));
-      
       // Log para auditoria de segurança
       console.log(`SEGURANÇA: Criando transação de pagamento para usuário ID: ${userId}`);
       
-      // Extrair o valor e a opção de bônus do corpo da requisição, ignorando qualquer userId que possa ter sido enviado
-      let { amount, useBonus } = req.body;
+      // Extrair apenas o valor do corpo da requisição, ignorando qualquer userId que possa ter sido enviado
+      let { amount } = req.body;
       
       // Verificar se alguém tentou enviar um userId no corpo da requisição (potencial ataque)
       if (req.body.userId !== undefined && req.body.userId !== userId) {
@@ -4339,10 +4284,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Pushin Pay gateway is not available" });
       }
       
-      // Log para verificar se o bônus foi solicitado
-      console.log(`BÔNUS: Usuário ${userId} ${useBonus ? 'SOLICITOU' : 'NÃO SOLICITOU'} bônus de primeiro depósito`);
-      console.log(`BÔNUS DEBUG: Parâmetro useBonus recebido = ${useBonus} (tipo: ${typeof useBonus})`);
-      
       // Create transaction record
       const transaction = await storage.createPaymentTransaction({
         userId,
@@ -4351,62 +4292,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "pending",
         type: "deposit" // Especificar explicitamente que é um depósito
       });
-      
-      // Salvar a informação sobre o bônus solicitado como metadados da transação
-      if (useBonus) {
-        await pool.query(
-          'UPDATE transactions SET metadata = $1 WHERE id = $2',
-          [JSON.stringify({ bonusRequested: true }), transaction.id]
-        );
-        console.log(`BÔNUS: Metadados salvos para transação ${transaction.id} - bônus solicitado`);
-        
-        // APLICAR BÔNUS AUTOMATICAMENTE - usando a mesma lógica do botão que funciona
-        console.log(`\n=== APLICAÇÃO AUTOMÁTICA DE BÔNUS ===`);
-        console.log(`Usuário solicitou bônus, aplicando automaticamente...`);
-        
-        try {
-          // Simular que a transação foi completed e aplicar o bônus
-          await storage.updateTransactionStatus(
-            transaction.id,
-            "completed",
-            `auto_${Date.now()}`,
-            undefined,
-            { autoCompleted: true, bonusApplied: true, completedAt: new Date().toISOString() }
-          );
-          
-          // Adicionar saldo ao usuário
-          await storage.updateUserBalance(userId, amount);
-          console.log(`Saldo do usuário ${userId} atualizado com +R$ ${amount}`);
-          
-          // USAR A MESMA LÓGICA DO BOTÃO "APLICAR BÔNUS" QUE FUNCIONA
-          // Buscar transações completed do usuário
-          const completedTransactions = await db
-            .select()
-            .from(paymentTransactions)
-            .where(and(
-              eq(paymentTransactions.userId, userId),
-              eq(paymentTransactions.status, "completed"),
-              eq(paymentTransactions.type, "deposit")
-            ));
-          
-          console.log(`Encontradas ${completedTransactions.length} transações completas para verificar bônus`);
-          
-          // Verificar se o usuário já recebeu bônus de primeiro depósito
-          const hasBonus = await storage.hasUserReceivedFirstDepositBonus(userId);
-          
-          if (!hasBonus) {
-            console.log(`Aplicando bônus de primeiro depósito para transação ${transaction.id}`);
-            await checkAndApplyFirstDepositBonus(userId, amount, true);
-            console.log(`Bônus aplicado automaticamente com sucesso!`);
-          } else {
-            console.log(`Usuário já recebeu bônus de primeiro depósito`);
-          }
-          
-        } catch (bonusError) {
-          console.error("Erro ao aplicar bônus automaticamente:", bonusError);
-          // Continuar mesmo com erro no bônus
-        }
-      }
 
       try {
         // Verificar se temos o token da Pushin Pay
@@ -4693,35 +4578,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (hasBonus) {
                 console.log(`[BÔNUS] Usuário ${userId} JÁ recebeu bônus de primeiro depósito anteriormente. Ignorando.`);
               } else {
-                console.log(`[BÔNUS] Usuário ${userId} NUNCA recebeu bônus de primeiro depósito. Verificando se foi solicitado.`);
+                console.log(`[BÔNUS] Usuário ${userId} NUNCA recebeu bônus de primeiro depósito. Prosseguindo.`);
+                console.log(`[BÔNUS] Aplicando bônus de primeiro depósito para usuário ${userId}`);
                 
-                // TESTE TEMPORÁRIO: Verificar se o usuário solicitou o bônus através dos metadados da transação
-                let bonusRequested = false;
-                try {
-                  if (updatedTransaction.metadata) {
-                    const metadata = typeof updatedTransaction.metadata === 'string' 
-                      ? JSON.parse(updatedTransaction.metadata) 
-                      : updatedTransaction.metadata;
-                    bonusRequested = metadata?.bonusRequested === true;
-                  }
-                } catch (error) {
-                  console.log(`[BÔNUS] Erro ao verificar metadados da transação: ${error}`);
-                }
-                
-                console.log(`[BÔNUS] Usuário ${bonusRequested ? 'SOLICITOU' : 'NÃO SOLICITOU'} bônus de primeiro depósito`);
-                
-                // IMPORTANTE: Manter aplicação do bônus via webhook para produção
-                console.log(`[BÔNUS] PRODUÇÃO: Aplicando bônus via webhook quando solicitado pelo usuário`);
-                
-                if (!bonusRequested) {
-                  console.log(`[BÔNUS] Bônus não foi solicitado pelo usuário. Pulando aplicação do bônus.`);
-                } else {
-                  console.log(`[BÔNUS] Aplicando bônus de primeiro depósito para usuário ${userId}`);
-                  
-                  // Usar a função existente para aplicar o bônus
-                  await checkAndApplyFirstDepositBonus(userId, depositAmount, true);
-                  
-                  // Calcular o valor do bônus (código legado - mantendo para referência)
+                // Calcular o valor do bônus
                 let bonusAmount = 0;
                 
                 if (systemSettings.firstDepositBonusPercentage > 0) {
@@ -4832,10 +4692,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     console.error(`[BÔNUS] ERRO ao processar bônus: ${error.message}`);
                     console.error(error.stack);
                   }
-                  } else {
-                    console.log(`[BÔNUS] Valor do bônus calculado é zero ou negativo (${bonusAmount}). Ignorando.`);
-                  }
-                } // Fim do bloco "bonusRequested"
+                } else {
+                  console.log(`[BÔNUS] Valor do bônus calculado é zero ou negativo (${bonusAmount}). Ignorando.`);
+                }
               }
             }
           } else {
@@ -5173,129 +5032,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  /**
-   * API para verificar elegibilidade do usuário para bônus de primeiro depósito
-   */
-  // Endpoint de teste para forçar aplicação do bônus de primeiro depósito
-  app.post("/api/bonus/test-first-deposit", requireAuth, async (req, res) => {
-    try {
-      const userId = req.user!.id;
-      const { amount = 10 } = req.body;
-      
-      console.log(`\n=== TESTE DE BÔNUS DE PRIMEIRO DEPÓSITO ===`);
-      console.log(`Usuário: ${req.user!.username} (ID: ${userId})`);
-      console.log(`Valor do depósito de teste: R$ ${amount}`);
-      console.log(`Forçando aplicação do bônus...`);
-      
-      await checkAndApplyFirstDepositBonus(userId, amount, true);
-      
-      res.json({ 
-        success: true, 
-        message: "Teste de bônus executado com sucesso",
-        userId,
-        amount 
-      });
-    } catch (error) {
-      console.error("Erro no teste de bônus:", error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
-
-  // 🔧 Endpoint para aplicar bônus em transações completed que não tiveram webhook
-  app.post("/api/bonus/apply-to-completed", requireAuth, async (req, res) => {
-    try {
-      const userId = req.user!.id;
-      
-      console.log(`\n=== APLICAR BÔNUS EM TRANSAÇÕES COMPLETED ===`);
-      console.log(`Usuário: ${req.user!.username} (ID: ${userId})`);
-      
-      // Buscar transações completed do usuário
-      const completedTransactions = await db
-        .select()
-        .from(paymentTransactions)
-        .where(and(
-          eq(paymentTransactions.userId, userId),
-          eq(paymentTransactions.status, "completed"),
-          eq(paymentTransactions.type, "deposit")
-        ));
-      
-      console.log(`Encontradas ${completedTransactions.length} transações completas`);
-      
-      let bonusAppliedCount = 0;
-      
-      for (const transaction of completedTransactions) {
-        try {
-          console.log(`Verificando transação ${transaction.id} - R$ ${transaction.amount}`);
-          
-          // Verificar se o usuário já recebeu bônus de primeiro depósito
-          const hasBonus = await storage.hasUserReceivedFirstDepositBonus(userId);
-          
-          if (!hasBonus) {
-            console.log(`Aplicando bônus de primeiro depósito para transação ${transaction.id}`);
-            await checkAndApplyFirstDepositBonus(userId, transaction.amount, true);
-            bonusAppliedCount++;
-            console.log(`Bônus aplicado com sucesso!`);
-            break; // Parar após aplicar o primeiro bônus
-          } else {
-            console.log(`Usuário já recebeu bônus de primeiro depósito`);
-          }
-        } catch (error) {
-          console.error(`Erro ao processar transação ${transaction.id}:`, error);
-          continue;
-        }
-      }
-      
-      console.log(`=== PROCESSAMENTO CONCLUÍDO ===`);
-      console.log(`Transações verificadas: ${completedTransactions.length}`);
-      console.log(`Bônus aplicados: ${bonusAppliedCount}`);
-      
-      res.json({
-        success: true,
-        message: `Processamento concluído. ${bonusAppliedCount} bônus aplicado(s).`,
-        transactionsChecked: completedTransactions.length,
-        bonusApplied: bonusAppliedCount
-      });
-      
-    } catch (error) {
-      console.error("Erro ao aplicar bônus em transações completed:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Erro interno do servidor" 
-      });
-    }
-  });
-
-  app.get("/api/bonus/first-deposit/eligibility", requireAuth, async (req, res) => {
-    try {
-      const userId = req.user!.id;
-      
-      // Verificar se o bônus está habilitado
-      const settings = await storage.getSystemSettings();
-      if (!settings?.firstDepositBonusEnabled) {
-        return res.json({ eligible: false, reason: "Bônus desabilitado pelo sistema" });
-      }
-
-      // Verificar transações do usuário
-      const userTransactions = await storage.getUserTransactions(userId);
-      const completedDeposits = userTransactions.filter(t => 
-        t.type === 'deposit' && 
-        t.status === 'completed'
-      );
-
-      const eligible = completedDeposits.length === 0;
-      const reason = eligible ? null : "Usuário já realizou depósitos anteriormente";
-
-      res.json({ 
-        eligible,
-        reason,
-        completedDeposits: completedDeposits.length
-      });
-    } catch (error) {
-      console.error("Erro ao verificar elegibilidade de bônus:", error);
-      res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  });
-
   /**
    * API para obter as configurações de bônus atuais
    * IMPLEMENTAÇÃO REESCRITA DO ZERO
