@@ -259,12 +259,12 @@ export function DepositDialog({
   // Console para debug das configurações de bônus
   console.log("Bonus settings (admin):", bonusSettings);
 
-  // Verificar se é o primeiro depósito do usuário
-  const { data: depositHistory = [] } = useQuery({
-    queryKey: ["/api/transactions/deposits"],
+  // Verificar se é o primeiro depósito do usuário usando o endpoint correto
+  const { data: allPaymentTransactions = [] } = useQuery({
+    queryKey: ["/api/payment-transactions"],
     queryFn: async () => {
-      console.log("🔍 FRONTEND: Fazendo chamada para /api/transactions/deposits");
-      const res = await apiRequest("GET", "/api/transactions/deposits");
+      console.log("🔍 FRONTEND: Fazendo chamada para /api/payment-transactions");
+      const res = await apiRequest("GET", "/api/payment-transactions");
       const data = await res.json();
       console.log("🔍 FRONTEND: Dados recebidos do servidor:", data);
       console.log("🔍 FRONTEND: Tipo dos dados:", Array.isArray(data) ? 'array' : typeof data);
@@ -273,6 +273,11 @@ export function DepositDialog({
     },
     enabled: isOpen,
   });
+  
+  // Filtrar apenas os depósitos das transações de pagamento
+  const depositHistory = allPaymentTransactions.filter((transaction: any) => 
+    transaction.type === 'deposit'
+  );
   
   // Determinar se o usuário é elegível para o bônus de primeiro depósito
   // Contar apenas depósitos que foram completados com sucesso
