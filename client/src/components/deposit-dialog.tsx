@@ -263,18 +263,28 @@ export function DepositDialog({
   const { data: depositHistory = [] } = useQuery({
     queryKey: ["/api/transactions/deposits"],
     queryFn: async () => {
+      console.log("🔍 FRONTEND: Fazendo chamada para /api/transactions/deposits");
       const res = await apiRequest("GET", "/api/transactions/deposits");
-      return await res.json();
+      const data = await res.json();
+      console.log("🔍 FRONTEND: Dados recebidos do servidor:", data);
+      console.log("🔍 FRONTEND: Tipo dos dados:", Array.isArray(data) ? 'array' : typeof data);
+      console.log("🔍 FRONTEND: Quantidade de itens:", Array.isArray(data) ? data.length : 'não é array');
+      return data;
     },
     enabled: isOpen,
   });
   
   // Determinar se o usuário é elegível para o bônus de primeiro depósito
   // Contar apenas depósitos que foram completados com sucesso
-  const completedDeposits = depositHistory.filter((transaction: any) => 
-    transaction.type === 'deposit' && transaction.status === 'completed'
-  );
+  console.log("🔍 FRONTEND: depositHistory completo:", depositHistory);
+  const completedDeposits = depositHistory.filter((transaction: any) => {
+    console.log(`🔍 TRANSAÇÃO: ID=${transaction.id}, Tipo=${transaction.type}, Status=${transaction.status}`);
+    return transaction.type === 'deposit' && transaction.status === 'completed';
+  });
   const isFirstDeposit = completedDeposits.length === 0;
+  
+  console.log("🔍 FRONTEND: Depósitos completados encontrados:", completedDeposits);
+  console.log("🔍 FRONTEND: Quantidade de depósitos completados:", completedDeposits.length);
   
   // CORREÇÃO: Se já tem depósitos completados, não é elegível para bônus de primeiro depósito
   console.log(`🔍 ELEGIBILIDADE BÔNUS: Usuário tem ${completedDeposits.length} depósitos completos`);
@@ -282,6 +292,7 @@ export function DepositDialog({
   
   if (!isFirstDeposit) {
     console.log(`❌ USUÁRIO NÃO ELEGÍVEL: Já realizou ${completedDeposits.length} depósito(s) anteriormente`);
+    console.log(`🔒 BÔNUS JÁ UTILIZADO: Este usuário não pode mais usar bônus de primeiro depósito`);
   }
   console.log('Deposit history:', completedDeposits.length === 0 ? 'Primeiro depósito' : `Já fez ${completedDeposits.length} depósitos completos`);
   console.log('System settings:', {
@@ -371,10 +382,17 @@ export function DepositDialog({
   
   // Determinar se o bônus deve ser exibido com base nas configurações do sistema
   // e no histórico de depósitos do usuário
-  // CORREÇÃO: Só mostrar bônus se for realmente o primeiro depósito E o bônus está ativado
-  const bonusEnabled = systemSettings?.firstDepositBonusEnabled === true && isFirstDeposit;
+  // CORREÇÃO: Verificar as configurações de bônus dos settings ou bonusSettings
+  const firstDepositBonusEnabled = 
+    systemSettings?.firstDepositBonusEnabled === true || 
+    bonusSettings?.firstDepositBonus?.enabled === true;
+  
+  // CORREÇÃO CRÍTICA: O bônus só deve aparecer se está habilitado E é primeiro depósito
+  const bonusEnabled = firstDepositBonusEnabled && isFirstDeposit;
   
   console.log(`🎛️ CONFIGURAÇÃO BÔNUS NO SISTEMA: ${systemSettings?.firstDepositBonusEnabled}`);
+  console.log(`🎛️ CONFIGURAÇÃO BÔNUS NOS BONUS SETTINGS: ${bonusSettings?.firstDepositBonus?.enabled}`);
+  console.log(`🎯 É PRIMEIRO DEPÓSITO: ${isFirstDeposit}`);
   console.log(`✅ BÔNUS HABILITADO PARA EXIBIÇÃO: ${bonusEnabled ? 'SIM' : 'NÃO'}`);
 
   // Mutation para criar uma transação de depósito
@@ -1001,7 +1019,7 @@ export function DepositDialog({
           />
           
           {/* Seção de bônus de primeiro depósito */}
-          {bonusEnabled && (
+          {firstDepositBonusEnabled && (
             isFirstDeposit ? (
               <FormField
                 control={form.control}
