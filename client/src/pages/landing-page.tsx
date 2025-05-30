@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { queryClient } from "@/lib/queryClient";
@@ -11,6 +11,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { BettingPanel } from "@/components/betting-panel";
 import { getAnimalEmoji } from "@/lib/animal-icons";
 import { DepositDialog } from "@/components/deposit-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { UserBetForm } from "@/components/user-bet-form";
 import { 
   ChevronRight, 
   CalendarDays, 
@@ -28,6 +30,7 @@ export default function LandingPage() {
   // Estados para controle da interface
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [depositOpen, setDepositOpen] = useState(false);
+  const [bettingOpen, setBettingOpen] = useState(false);
   
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -36,6 +39,80 @@ export default function LandingPage() {
   const handleDeposit = () => {
     setDepositOpen(true);
   };
+
+  // Listeners para eventos do menu mobile
+  useEffect(() => {
+    const handleMobileNav = (event: CustomEvent) => {
+      const section = event.detail?.section || event.detail;
+      console.log('📱 Navegação mobile na landing page:', section);
+      console.log('📱 Event detail completo:', event.detail);
+      console.log('📱 User status:', user ? 'logado' : 'não logado');
+      
+      switch (section) {
+        case 'home':
+          // Scroll para o topo da página inicial
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          break;
+        case 'results':
+          // Navegar para o painel do usuário
+          if (user) {
+            navigate('/user-dashboard');
+          } else {
+            if (window.confirm("Você precisa estar logado para ver os resultados. Deseja fazer login agora?")) {
+              navigate("/auth");
+            }
+          }
+          break;
+        case 'bet':
+          // Abrir painel de apostas ou redirecionar para login
+          if (!user) {
+            if (window.confirm("Você precisa estar logado para apostar. Deseja fazer login agora?")) {
+              navigate("/auth");
+            }
+          } else {
+            setBettingOpen(true);
+          }
+          break;
+        case 'quotes':
+          // Scroll para seção de cotações na página atual
+          const quotesSection = document.getElementById('betting-section');
+          if (quotesSection) {
+            quotesSection.scrollIntoView({ behavior: 'smooth' });
+          }
+          break;
+        case 'wallet':
+          // Navegar para o painel de usuários
+          if (user) {
+            navigate('/user-dashboard');
+          } else {
+            if (window.confirm("Você precisa estar logado para acessar a carteira. Deseja fazer login agora?")) {
+              navigate("/auth");
+            }
+          }
+          break;
+      }
+    };
+
+    const handleMenuToggle = () => {
+      console.log('📱 Menu clicado na landing page');
+      // Se estiver no contexto do dashboard (como aba), voltar para o dashboard
+      if (user) {
+        // Disparar evento customizado para voltar ao dashboard
+        window.dispatchEvent(new CustomEvent('return-to-dashboard'));
+      } else {
+        // Se não estiver logado, scroll para o topo
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('mobile-nav', handleMobileNav as EventListener);
+    window.addEventListener('mobile-menu-toggle', handleMenuToggle);
+
+    return () => {
+      window.removeEventListener('mobile-nav', handleMobileNav as EventListener);
+      window.removeEventListener('mobile-menu-toggle', handleMenuToggle);
+    };
+  }, [user, navigate]);
   
   const { data: animals, isLoading: isLoadingAnimals } = useQuery<Animal[]>({
     queryKey: ["/api/animals"],
@@ -97,17 +174,17 @@ export default function LandingPage() {
                     Olá, <span className="font-medium">{user.name || user.username}</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <div className="text-sm bg-green-500 bg-opacity-90 px-3 py-1 rounded-full flex items-center">
-                      <DollarSign className="h-3 w-3 mr-1" />
+                    <div className="text-sm bg-green-500 bg-opacity-90 px-3 py-2 rounded-lg flex items-center h-8">
+                      <span className="font-medium text-xs mr-1">R$</span>
                       <span className="font-medium">{user.balance.toFixed(2)}</span>
                     </div>
                     <Button 
                       size="sm" 
                       variant="secondary" 
-                      className="bg-yellow-500 hover:bg-yellow-600 text-black text-xs py-1 px-2 h-auto border-none"
+                      className="bg-yellow-500 hover:bg-yellow-600 text-black text-xs px-3 py-2 h-8 border-none rounded-lg"
                       onClick={handleDeposit}
                     >
-                      <DollarSign className="h-3 w-3 mr-1" />
+                      <span className="font-medium text-xs mr-1">R$</span>
                       Depositar
                     </Button>
                   </div>
@@ -448,6 +525,20 @@ export default function LandingPage() {
           queryClient.invalidateQueries({ queryKey: ["/api/user"] });
         }}
       />
+
+      {/* Betting Dialog for Mobile Menu */}
+      <Dialog open={bettingOpen} onOpenChange={setBettingOpen}>
+        <DialogContent className="w-[95%] max-w-md p-0 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Fazer Aposta</DialogTitle>
+            <DialogDescription>Escolha sua aposta</DialogDescription>
+          </DialogHeader>
+          
+          <UserBetForm 
+            onComplete={() => setBettingOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

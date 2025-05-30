@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Navbar } from "@/components/navbar";
 import { UserStats } from "@/components/user-stats";
 import { UpcomingDrawsCard, UserActionsCard } from "@/components/stats-card";
@@ -22,13 +23,81 @@ import { UserBetForm } from "@/components/user-bet-form";
 import { UserBonuses } from "@/components/user-bonuses";
 // Importar o componente de exibição de saldo de bônus
 import { BonusBalanceDisplay } from "@/components/bonus-balance-display";
+import LandingPage from "./landing-page";
 
 export default function UserDashboard() {
   const { user } = useAuth();
+  const [location] = useLocation();
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickBetOpen, setQuickBetOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("apostas");
+  const [showLandingPage, setShowLandingPage] = useState(false);
+
+
+
+  // Listeners para eventos do menu mobile
+  useEffect(() => {
+    const handleMobileNav = (event: CustomEvent) => {
+      const action = event.detail;
+      console.log('📱 Navegação mobile recebida:', action);
+      
+      switch (action) {
+        case 'home':
+          // INICIO: sempre vai para página inicial
+          console.log('📱 INICIO: Navegando para página inicial');
+          setShowLandingPage(true);
+          break;
+        case 'results':
+          // Se estiver na página inicial, voltar ao dashboard primeiro
+          if (showLandingPage) {
+            setShowLandingPage(false);
+          }
+          setActiveTab("resultados");
+          break;
+        case 'bet':
+          setQuickBetOpen(true);
+          break;
+        case 'quotations':
+          // Se estiver na página inicial, voltar ao dashboard primeiro
+          if (showLandingPage) {
+            setShowLandingPage(false);
+          }
+          setActiveTab("apostas");
+          break;
+        case 'wallet':
+          // CARTEIRA: sempre vai para painel de usuário
+          console.log('📱 CARTEIRA: Navegando para painel de usuário');
+          setShowLandingPage(false);
+          setActiveTab("transacoes");
+          break;
+        default:
+          break;
+      }
+    };
+
+    const handleMenuToggle = () => {
+      console.log('📱 Menu clicado - mostrando página inicial');
+      // Mostrar página inicial como aba interna
+      setShowLandingPage(true);
+    };
+
+    const handleReturnToDashboard = () => {
+      console.log('📱 Voltando para o dashboard');
+      setShowLandingPage(false);
+    };
+
+    window.addEventListener('mobile-nav', handleMobileNav as EventListener);
+    window.addEventListener('mobile-menu-toggle', handleMenuToggle);
+    window.addEventListener('return-to-dashboard', handleReturnToDashboard);
+
+    return () => {
+      window.removeEventListener('mobile-nav', handleMobileNav as EventListener);
+      window.removeEventListener('mobile-menu-toggle', handleMenuToggle);
+      window.removeEventListener('return-to-dashboard', handleReturnToDashboard);
+    };
+  }, []);
 
   const { data: betsResponse, isLoading: betsLoading } = useQuery<{
     data: BetWithDetails[],
@@ -80,6 +149,30 @@ export default function UserDashboard() {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <Skeleton className="h-12 w-48" />
+      </div>
+    );
+  }
+
+  // Se mostrar página inicial, renderizar ela
+  if (showLandingPage) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Botão para voltar ao dashboard */}
+        <div className="fixed top-4 right-4 z-50">
+          <Button 
+            onClick={() => {
+              console.log('📱 Botão Voltar ao Painel clicado');
+              setShowLandingPage(false);
+            }}
+            variant="outline"
+            size="sm"
+            className="bg-white shadow-lg hover:bg-gray-50"
+          >
+            ← Voltar ao Painel
+          </Button>
+        </div>
+        
+        <LandingPage />
       </div>
     );
   }
@@ -195,23 +288,23 @@ export default function UserDashboard() {
 
         {/* Abas de histórico */}
         <div id="history" className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-4">
-          <Tabs defaultValue="bets" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full grid grid-cols-4 mb-4">
-              <TabsTrigger value="bets" className="text-sm sm:text-base">Apostas</TabsTrigger>
-              <TabsTrigger value="transactions" className="text-sm sm:text-base">Transações</TabsTrigger>
-              <TabsTrigger value="bonuses" className="text-sm sm:text-base">Bônus</TabsTrigger>
-              <TabsTrigger value="payments" className="text-sm sm:text-base">Pagamentos</TabsTrigger>
+              <TabsTrigger value="apostas" className="text-sm sm:text-base">Apostas</TabsTrigger>
+              <TabsTrigger value="transacoes" className="text-sm sm:text-base">Transações</TabsTrigger>
+              <TabsTrigger value="bonus" className="text-sm sm:text-base">Bônus</TabsTrigger>
+              <TabsTrigger value="resultados" className="text-sm sm:text-base">Resultados</TabsTrigger>
             </TabsList>
-            <TabsContent value="bets" id="recent-bets">
+            <TabsContent value="apostas" id="recent-bets">
               <RecentBets />
             </TabsContent>
-            <TabsContent value="transactions">
+            <TabsContent value="transacoes">
               <TransactionHistory />
             </TabsContent>
-            <TabsContent value="bonuses">
+            <TabsContent value="bonus">
               <UserBonuses />
             </TabsContent>
-            <TabsContent value="payments">
+            <TabsContent value="resultados">
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-semibold mb-4">💳 Gateways de Pagamento</h3>
