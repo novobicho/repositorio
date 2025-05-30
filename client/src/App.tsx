@@ -18,6 +18,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SiteHeader } from "@/components/site-header";
 import { MaintenanceModal } from "@/components/maintenance-modal";
 import { DirectDepositDialog } from "@/components/direct-deposit-dialog";
+import { MobileBottomMenu } from "@/components/mobile-bottom-menu";
 
 function Router() {
   const { user } = useAuth();
@@ -60,7 +61,34 @@ function App() {
       const elementsToRemove: HTMLElement[] = [];
 
       // Buscar por elementos com texto "Depositar" ou que tenham classes/IDs relacionados
+      console.log('🔍 Iniciando verificação de elementos para remoção...');
       document.querySelectorAll('*').forEach(el => {
+        // PROTEÇÃO TOTAL: Não remover nosso menu mobile de forma alguma
+        if (el.classList.contains('mobile-bottom-menu') || 
+            el.classList.contains('mobile-menu-container') ||
+            (el as HTMLElement).closest('.mobile-bottom-menu') ||
+            (el as HTMLElement).closest('.mobile-menu-container') ||
+            el.getAttribute('class')?.includes('mobile-bottom-menu') ||
+            el.getAttribute('class')?.includes('mobile-menu-container') ||
+            el.id === 'force-mobile-menu' ||
+            el.id === 'html-test-menu' ||
+            (el as HTMLElement).closest('#force-mobile-menu') ||
+            (el as HTMLElement).closest('#html-test-menu')) {
+          console.log('🛡️ PROTEGENDO MENU:', el.id, el.className);
+          return; // Proteger nosso menu mobile completamente
+        }
+        
+        // PROTEÇÃO ADICIONAL: Não remover elementos que fazem parte do menu mobile
+        const elementText = el.textContent?.trim().toLowerCase() || '';
+        if (elementText.includes('menu') || elementText.includes('resultados') || 
+            elementText.includes('fazer aposta') || elementText.includes('cotação') || 
+            elementText.includes('carteira')) {
+          const parentElement = (el as HTMLElement).closest('.mobile-bottom-menu');
+          if (parentElement) {
+            return; // Este elemento faz parte do nosso menu mobile
+          }
+        }
+        
         // Verificar o texto do elemento
         const text = el.textContent?.trim().toLowerCase() || '';
         
@@ -73,7 +101,11 @@ function App() {
         }
         
         // 1. Remover qualquer botão com texto "Depositar" ou "Sacar" no final da página
-        if (text === 'depositar' || text === 'sacar' || text === 'saque') {
+        // MAS NUNCA remover nosso menu mobile
+        if ((text === 'depositar' || text === 'sacar' || text === 'saque') && 
+            !text.includes('menu') && !text.includes('fazer aposta') && 
+            !text.includes('resultados') && !text.includes('cotação') && 
+            !text.includes('carteira')) {
           const position = computedStyle.getPropertyValue('position');
           const bottom = computedStyle.getPropertyValue('bottom');
           
@@ -214,12 +246,13 @@ function App() {
               <SiteHeader />
               <Toaster />
               <Router />
+              <MobileBottomMenu />
               <DirectDepositDialog />
             
-              {/* Estilo global para ocultar qualquer botão fixo */}
+              {/* Estilo global para ocultar qualquer botão fixo - EXCETO nosso menu mobile */}
               <style>{`
-                div[style*="position:fixed"][style*="bottom"][style*="left"],
-                button[style*="position:fixed"][style*="bottom"][style*="left"],
+                div[style*="position:fixed"][style*="bottom"][style*="left"]:not([class*="mobile-bottom-menu"]),
+                button[style*="position:fixed"][style*="bottom"][style*="left"]:not([class*="mobile-bottom-menu"]),
                 .floating-deposit-button,
                 .fixed-deposit-button,
                 .floating-withdraw-button,
@@ -231,13 +264,19 @@ function App() {
                 [class*="deposit"][class*="button"],
                 [class*="sacar"][class*="button"],
                 [class*="saque"][class*="button"],
-                [class*="withdraw"][class*="button"],
-                .bottom-0.left-0.fixed,
-                .left-0.bottom-0.fixed {
+                [class*="withdraw"][class*="button"] {
                   display: none !important;
                   visibility: hidden !important;
                   opacity: 0 !important;
                   pointer-events: none !important;
+                }
+                
+                /* Garantir que nosso menu mobile sempre apareça */
+                .mobile-bottom-menu {
+                  display: block !important;
+                  visibility: visible !important;
+                  opacity: 1 !important;
+                  pointer-events: auto !important;
                 }
               `}</style>
             </ThemeProvider>
