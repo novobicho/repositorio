@@ -52,14 +52,14 @@ export function BonusSettings() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  // Buscar configurações atuais do sistema direto do banco
+  // Buscar configurações atuais do sistema
   const { data: systemSettings } = useQuery({
     queryKey: ["/api/settings"],
     queryFn: async () => {
-      console.log("🔍 Carregando configurações do sistema...");
+      console.log("[API Request] GET /api/settings");
       const res = await apiRequest("GET", "/api/settings");
       const data = await res.json();
-      console.log("📋 Configurações carregadas do banco:", data);
+      console.log("Configurações de bônus carregadas:", data);
       return data;
     },
   });
@@ -82,12 +82,13 @@ export function BonusSettings() {
     mode: "onChange",
   });
 
-  // Atualizar formulário com dados do banco de dados
+  // Usar um useEffect para atualizar o formulário quando os dados forem carregados
+  // Isso garante que a inicialização dos valores aconteça após o carregamento completo
   useEffect(() => {
     if (systemSettings) {
-      console.log("📝 Atualizando formulário com dados do banco:", systemSettings);
+      console.log("Atualizando formulário com dados:", systemSettings);
       
-      // Mapear corretamente os dados do endpoint /api/settings
+      // Garantir que os valores booleanos sejam explicitamente tratados como booleanos
       form.reset({
         signupBonusEnabled: systemSettings.signupBonusEnabled === true,
         signupBonusAmount: systemSettings.signupBonusAmount || 10,
@@ -106,44 +107,14 @@ export function BonusSettings() {
   // Mutation para salvar as configurações
   const saveMutation = useMutation({
     mutationFn: async (data: BonusSettings) => {
-      console.log("🎯 ADMIN: Salvando configurações de bônus:", data);
-      
-      // Estruturar dados no formato esperado pelo endpoint
-      const bonusConfig = {
-        signupBonus: {
-          enabled: data.signupBonusEnabled,
-          amount: data.signupBonusAmount,
-          rollover: data.signupBonusRollover,
-          expiration: data.signupBonusExpiration,
-        },
-        firstDepositBonus: {
-          enabled: data.firstDepositBonusEnabled,
-          amount: data.firstDepositBonusAmount,
-          percentage: data.firstDepositBonusPercentage,
-          maxAmount: data.firstDepositBonusMaxAmount,
-          rollover: data.firstDepositBonusRollover,
-          expiration: data.firstDepositBonusExpiration,
-        },
-        promotionalBanners: {
-          enabled: false // Por enquanto fixo
-        }
-      };
-      
-      console.log("📤 Enviando para /api/bonus-settings-admin:", bonusConfig);
-      const res = await apiRequest("POST", "/api/bonus-settings-admin", bonusConfig);
+      console.log("Enviando dados de bônus via PATCH:", data);
+      const res = await apiRequest("PATCH", "/api/admin/settings", data);
       return await res.json();
     },
     onSuccess: (data) => {
-      console.log("✅ Configurações de bônus salvas com sucesso!");
-      
-      // Invalidar cache para recarregar dados atualizados
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/bonus-settings"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
-      
       // Verificar se o bônus foi ativado ou desativado
       const bonusesAtivados: string[] = [];
-      const formData = form.getValues();
-      if (formData.signupBonusEnabled) {
+      if (data.signupBonusEnabled) {
         bonusesAtivados.push("Bônus de Cadastro");
       }
       if (data.firstDepositBonusEnabled) {

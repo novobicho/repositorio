@@ -46,11 +46,10 @@ import { Input } from "@/components/ui/input";
 
 // Schema de validação para o formulário de chave PIX
 const pixKeyFormSchema = z.object({
-  pixKeyType: z.enum(["email"], {
+  pixKeyType: z.enum(["cpf", "email"], {
     required_error: "Selecione o tipo de chave PIX",
   }),
-  pixKey: z.string()
-    .email({ message: "Email inválido" })
+  pixKey: z.string().min(1, { message: "Chave PIX é obrigatória" })
 });
 
 type PixKeyFormValues = z.infer<typeof pixKeyFormSchema>;
@@ -70,15 +69,21 @@ export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogPro
     resolver: zodResolver(pixKeyFormSchema),
     defaultValues: {
       pixKeyType: "email",
-      pixKey: user?.defaultPixKey || "",
+      pixKey: "",
     },
   });
 
   // Atualizar formulário quando o usuário for carregado
   useEffect(() => {
-    if (user && user.email) {
-      pixKeyForm.setValue("pixKey", user.email);
-      pixKeyForm.setValue("pixKeyType", "email");
+    if (user) {
+      // Priorizar CPF se disponível, senão usar email
+      if (user.cpf) {
+        pixKeyForm.setValue("pixKey", user.cpf);
+        pixKeyForm.setValue("pixKeyType", "cpf");
+      } else if (user.email) {
+        pixKeyForm.setValue("pixKey", user.email);
+        pixKeyForm.setValue("pixKeyType", "email");
+      }
     }
   }, [user, pixKeyForm]);
 
@@ -215,6 +220,7 @@ export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogPro
                             onValueChange={field.onChange}
                             defaultValue={field.value}
                             value={field.value}
+                            disabled
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -222,6 +228,7 @@ export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogPro
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
+                              <SelectItem value="cpf">CPF</SelectItem>
                               <SelectItem value="email">Email</SelectItem>
                             </SelectContent>
                           </Select>
@@ -235,12 +242,15 @@ export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogPro
                       name="pixKey"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email para recebimento</FormLabel>
+                          <FormLabel>
+                            {user?.cpf ? "CPF para recebimento" : "Email para recebimento"}
+                          </FormLabel>
                           <FormControl>
                             <Input
-                              placeholder="seu.email@exemplo.com"
+                              placeholder={user?.cpf ? "000.000.000-00" : "seu.email@exemplo.com"}
                               {...field}
-                              type="email"
+                              type={user?.cpf ? "text" : "email"}
+                              disabled
                             />
                           </FormControl>
                           <FormMessage />
@@ -248,18 +258,11 @@ export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogPro
                       )}
                     />
 
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={savePixKeyMutation.isPending}
-                    >
-                      {savePixKeyMutation.isPending ? (
-                        <div className="flex items-center">
-                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-                          Salvando...
-                        </div>
-                      ) : 'Salvar Chave PIX'}
-                    </Button>
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-700">
+                        <strong>Informação:</strong> A chave PIX é definida automaticamente com base nos seus dados cadastrais e não pode ser alterada diretamente.
+                      </p>
+                    </div>
                   </form>
                 </Form>
               </div>

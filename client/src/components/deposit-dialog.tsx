@@ -6,7 +6,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { MoneyInput } from "./money-input";
-import { NumericKeyboard } from "./numeric-keyboard";
+
 
 import {
   Dialog,
@@ -94,7 +94,7 @@ export function DepositDialog({
   const [open, setOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showKeyboard, setShowKeyboard] = useState(false);
+  const [selectedGateway, setSelectedGateway] = useState<string>("");
   const [transactionStatus, setTransactionStatus] = useState<'idle' | 'success' | 'processing' | 'error'>('idle');
   const [transactionDetail, setTransactionDetail] = useState<any>(null);
   const { toast } = useToast();
@@ -234,7 +234,7 @@ export function DepositDialog({
   });
   
   // Buscar configurações específicas de bônus
-  const { data: bonusSettings = {} } = useQuery({
+  const { data: bonusSettings = {}, isLoading: bonusSettingsLoading } = useQuery({
     queryKey: ["/api/bonus-settings", isOpen], // Adiciona isOpen para invalidar cache quando abre
     queryFn: async () => {
       // Tentar primeiro endpoint admin (para administradores)
@@ -359,7 +359,15 @@ export function DepositDialog({
   
   // Determinar se o bônus deve ser exibido com base nas configurações do sistema
   // e no histórico de depósitos do usuário
-  const bonusEnabled = systemSettings?.firstDepositBonusEnabled !== false && isFirstDeposit;
+  // Só mostrar quando as configurações estiverem carregadas para evitar lag visual
+  const bonusConfigLoaded = !bonusSettingsLoading && bonusSettings;
+  
+  // Usar as configurações do admin que têm prioridade sobre as configurações do sistema
+  const firstDepositBonusEnabled = bonusConfigLoaded && bonusSettings?.firstDepositBonus?.enabled !== undefined 
+    ? bonusSettings.firstDepositBonus.enabled 
+    : systemSettings?.firstDepositBonusEnabled !== false;
+  
+  const bonusEnabled = bonusConfigLoaded && firstDepositBonusEnabled && isFirstDeposit;
 
   // Mutation para criar uma transação de depósito
   const depositMutation = useMutation({
@@ -498,45 +506,7 @@ export function DepositDialog({
     });
   };
 
-  // Handler para entrada numérica do teclado
-  const handleKeyPress = (value: string) => {
-    if (value === "C") {
-      setDepositAmount("");
-      form.setValue("amount", 0);
-      setCurrentDepositValue(0);
-      return;
-    }
 
-    if (value === "←") {
-      const newValue = depositAmount.slice(0, -1);
-      setDepositAmount(newValue);
-      const parsedAmount = parseMoneyValue(newValue);
-      form.setValue("amount", parsedAmount);
-      setCurrentDepositValue(parsedAmount);
-      return;
-    }
-
-    // Permitir apenas um ponto decimal
-    if (value === "," && depositAmount.includes(",")) {
-      return;
-    }
-
-    // Limitar a 2 casas decimais após a vírgula
-    if (depositAmount.includes(",")) {
-      const parts = depositAmount.split(",");
-      if (parts[1] && parts[1].length >= 2) {
-        return;
-      }
-    }
-
-    const newValue = depositAmount + value;
-    setDepositAmount(newValue);
-    const parsedAmount = parseMoneyValue(newValue);
-    form.setValue("amount", parsedAmount);
-    
-    // Atualizar o valor de depósito no estado para recalcular o bônus
-    setCurrentDepositValue(parsedAmount);
-  };
 
   // Converter string de valor para número (considerando formato brasileiro)
   const parseMoneyValue = (value: string): number => {
@@ -868,17 +838,20 @@ export function DepositDialog({
               <FormItem className="mb-4">
                 <FormLabel>Valor</FormLabel>
                 <FormControl>
-                  <MoneyInput
+                  <input
+                    type="text"
                     value={depositAmount}
-                    onChange={(value) => {
+                    onChange={(e) => {
+                      const value = e.target.value;
                       setDepositAmount(value);
                       const parsedValue = parseMoneyValue(value);
                       field.onChange(parsedValue);
                       setCurrentDepositValue(parsedValue);
                     }}
-                    onFocus={() => setShowKeyboard(true)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="R$ 0,00"
-                    className="text-2xl font-bold text-center"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-2xl font-bold text-center ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </FormControl>
                 
@@ -907,13 +880,7 @@ export function DepositDialog({
             )}
           />
 
-          {showKeyboard && (
-            <Card className="mb-4">
-              <CardContent className="p-2">
-                <NumericKeyboard onKeyPress={handleKeyPress} showDecimal />
-              </CardContent>
-            </Card>
-          )}
+
 
           <FormField
             control={form.control}
@@ -921,26 +888,27 @@ export function DepositDialog({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Método de Pagamento</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um método de pagamento" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {gateways.map((gateway) => (
-                      <SelectItem
-                        key={gateway.id}
-                        value={gateway.id.toString()}
-                      >
-                        {gateway.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-1 gap-3 mt-2">
+                  {gateways.map((gateway) => (
+                    <Button
+                      key={gateway.id}
+                      type="button"
+                      variant={field.value === gateway.id.toString() ? "default" : "outline"}
+                      className={`h-12 justify-start text-left ${
+                        field.value === gateway.id.toString() 
+                          ? "bg-primary text-primary-foreground border-primary" 
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                      onClick={() => {
+                        field.onChange(gateway.id.toString());
+                        setSelectedGateway(gateway.id.toString());
+                      }}
+                    >
+                      <CreditCard className="w-4 h-4 mr-3" />
+                      {gateway.name}
+                    </Button>
+                  ))}
+                </div>
                 <FormDescription>
                   Escolha como deseja fazer seu depósito
                 </FormDescription>

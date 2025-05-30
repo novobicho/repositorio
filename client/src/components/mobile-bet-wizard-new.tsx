@@ -43,7 +43,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { InsufficientBalanceDialog } from "./insufficient-balance-dialog";
 import { SimpleInsufficientDialog } from "./simple-insufficient-dialog";
-import { DepositDialog } from "./deposit-dialog";
 import { requestOpenDepositDialog } from "./direct-deposit-dialog";
 
 // Esquema simplificado para validar os dados da aposta
@@ -104,15 +103,13 @@ export function MobileBetWizardNew({
   const [savedBetData, setSavedBetData] = useState<BetFormData | null>(null);
   const [bonusBalance, setBonusBalance] = useState(0);
   
-  // Estado global para diálogo de depósito (não depende de nenhum outro diálogo)
-  const [showDepositDialog, setShowDepositDialog] = useState(false);
+
   
   // Função que realmente limpa/reseta todos os diálogos e estados
   const resetAllDialogs = useCallback(() => {
     console.log("🧹 Limpando todos os diálogos e estados");
     setShowSimpleDialog(false);
     setShowInsufficientDialog(false);
-    setShowDepositDialog(false);
     setSavedBetData(null);
     setRequiredAmount(0);
     setBetNumber("");
@@ -170,7 +167,7 @@ export function MobileBetWizardNew({
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      amount: 2.00, // Valor padrão inicial
+      amount: 2, // Valor padrão inicial (número inteiro)
       premioType: "1", // Prêmio 1 por padrão
       type: "group" // Tipo grupo por padrão
     }
@@ -178,6 +175,14 @@ export function MobileBetWizardNew({
 
   // Observar valores do formulário para cálculos em tempo real
   const formValues = form.watch();
+
+  // Garantir que o valor padrão de R$ 2,00 seja aplicado sempre que o diálogo abrir
+  useEffect(() => {
+    if (open) {
+      console.log("Diálogo aberto - aplicando valor padrão R$ 2,00");
+      form.setValue("amount", 2, { shouldValidate: true });
+    }
+  }, [form, open]);
 
   // Configurar valores padrão quando o componente é carregado - CORRIGIDO para evitar loops infinitos
   useEffect(() => {
@@ -787,38 +792,38 @@ export function MobileBetWizardNew({
     switch (step) {
       case 1: // Seleção de modalidade
         return (
-          <div className="space-y-5 px-4 py-3">
-            <DialogHeader className="pb-1">
-              <DialogTitle className="text-center text-xl">Escolha a Modalidade</DialogTitle>
-              <DialogDescription className="text-center">
+          <div className="space-y-2 px-3 py-1">
+            <DialogHeader className="pb-0">
+              <DialogTitle className="text-center text-lg">Escolha a Modalidade</DialogTitle>
+              <DialogDescription className="text-center text-sm">
                 Selecione como você deseja jogar
               </DialogDescription>
             </DialogHeader>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-2">
               {activeGameModes.map(mode => (
                 <Button
                   key={mode.id}
                   variant={activeModality === mode.id.toString() ? "default" : "outline"}
-                  className="flex flex-col items-center justify-center h-20 p-2"
+                  className="flex flex-col items-center justify-center h-16 p-1 text-xs"
                   onClick={() => handleModeSelect(mode.id.toString())}
                 >
-                  <span className="font-medium">{mode.name}</span>
-                  <span className="text-xs mt-1 bg-primary/10 px-2 py-0.5 rounded-full">
+                  <span className="font-medium text-xs leading-tight">{mode.name}</span>
+                  <span className="text-[10px] mt-0.5 bg-primary/10 px-1.5 py-0.5 rounded-full">
                     {mode.odds}x
                   </span>
                 </Button>
               ))}
             </div>
             
-            <DialogFooter className="pb-2">
+            <DialogFooter className="pb-1 pt-2">
               <Button 
                 type="button"
                 disabled={!canProceed()}
                 onClick={handleNextStep}
-                className="w-full mt-4 mb-2 rounded-full py-5 text-base font-medium shadow-md transition-all hover:shadow-lg"
+                className="w-full rounded-full py-3 text-sm font-medium shadow-md transition-all hover:shadow-lg"
               >
-                Próximo <ArrowRight className="h-4 w-4 ml-2 animate-pulse" />
+                Próximo <ArrowRight className="h-3 w-3 ml-2" />
               </Button>
             </DialogFooter>
           </div>
@@ -826,9 +831,9 @@ export function MobileBetWizardNew({
       
       case 2: // Seleção de animal ou entrada de número
         return (
-          <div className="space-y-4 px-4 py-3">
-            <DialogHeader>
-              <DialogTitle className="text-center">
+          <div className="space-y-2 px-3 py-2">
+            <DialogHeader className="pb-1">
+              <DialogTitle className="text-center text-lg">
                 {selectedCategory === "groups" 
                   ? "Escolha um Animal" 
                   : `Digite o Número (${selectedCategory === "dozens" ? "Dezena" : selectedCategory === "hundreds" ? "Centena" : "Milhar"})`}
@@ -836,17 +841,16 @@ export function MobileBetWizardNew({
             </DialogHeader>
             
             {selectedCategory === "groups" ? (
-              <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pb-2">
+              <div className="grid grid-cols-4 gap-2 pb-2">
                 {sortedAnimals.map(animal => (
                   <Button
                     key={animal.id}
                     variant={selectedAnimal?.id === animal.id ? "default" : "outline"}
-                    className="flex flex-col items-center justify-center h-24 p-2"
+                    className="flex flex-col items-center justify-center h-14 p-2 text-center"
                     onClick={() => handleAnimalSelect(animal)}
                   >
-                    <span className="text-2xl mb-1">{getAnimalEmoji(animal.name)}</span>
-                    <span className="text-xs font-medium">{animal.name}</span>
-                    <span className="text-xs">{animal.group}</span>
+                    <span className="text-lg">{getAnimalEmoji(animal.name)}</span>
+                    <span className="text-xs font-medium leading-tight -mt-1">{animal.name}</span>
                   </Button>
                 ))}
               </div>
@@ -1093,7 +1097,20 @@ export function MobileBetWizardNew({
               <FormField
                 control={form.control}
                 name="amount"
-                render={({ field }) => (
+                render={({ field }) => {
+                  // Garantir que o valor padrão seja definido se não existir
+                  if (!field.value) {
+                    field.onChange(2);
+                  }
+                  console.log("DEBUG CAMPO AMOUNT:", { 
+                    fieldValue: field.value, 
+                    fieldType: typeof field.value,
+                    isFieldValue2: field.value === 2,
+                    isFieldValue2String: field.value === "2",
+                    isFieldValue2Float: field.value === 2.0
+                  });
+                  
+                  return (
                   <FormItem>
                     <FormLabel>Selecione o valor da aposta:</FormLabel>
                     <FormControl>
@@ -1102,9 +1119,11 @@ export function MobileBetWizardNew({
                           <Button
                             key={value}
                             type="button"
-                            variant={field.value === value ? "default" : "outline"}
-                            className={`p-3 h-auto text-sm font-medium ${
-                              field.value === value ? "bg-green-600 text-white hover:bg-green-700" : "bg-white"
+                            variant="outline"
+                            className={`p-3 h-auto text-sm font-medium transition-all ${
+                              (Number(field.value) === Number(value) || (!field.value && value === 2))
+                                ? "!bg-green-600 !text-white hover:!bg-green-700 !border-2 !border-green-500 shadow-lg ring-2 ring-green-400" 
+                                : "bg-white border border-gray-200 hover:border-green-300 text-gray-700"
                             }`}
                             onClick={() => {
                               field.onChange(value);
@@ -1117,7 +1136,8 @@ export function MobileBetWizardNew({
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
+                  );
+                }}
               />
               
               {/* Informações da aposta */}
@@ -1214,7 +1234,6 @@ export function MobileBetWizardNew({
                     </span>
                   ) : (
                     <span className="flex items-center">
-                      <DollarSign className="h-4 w-4 mr-2" />
                       Confirmar Aposta
                     </span>
                   )}
@@ -1299,69 +1318,7 @@ export function MobileBetWizardNew({
           />
         )}
         
-        {/* Diálogo de depósito */}
-        <DepositDialog
-          open={showDepositDialog}
-          onOpenChange={setShowDepositDialog}
-          renderAsButton={false}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-            
-            // Solicitar os dados atualizados do usuário
-            const checkDepositAndBet = async () => {
-              try {
-                // Apenas tenta processar a aposta se tiver dados salvos
-                if (savedBetData && user) {
-                  const response = await apiRequest("GET", "/api/user");
-                  const updatedUser = await response.json();
-                  
-                  console.log("Verificando saldo após depósito:", {
-                    updatedBalance: updatedUser?.balance || 0,
-                    requiredAmount: requiredAmount
-                  });
-                  
-                  if (updatedUser && updatedUser.balance >= requiredAmount) {
-                    console.log("Saldo após depósito é suficiente, processando aposta salva");
-                    // Processar a aposta salva
-                    betMutation.mutate(savedBetData);
-                    
-                    // Limpar dados salvos após o processamento
-                    setSavedBetData(null);
-                    setRequiredAmount(0);
-                    
-                    toast({
-                      title: "Depósito realizado e aposta processada!",
-                      description: "Seu saldo foi atualizado e sua aposta foi registrada automaticamente.",
-                      variant: "default",
-                    });
-                  } else {
-                    toast({
-                      title: "Depósito realizado com sucesso!",
-                      description: "Seu saldo foi atualizado, mas ainda é insuficiente para a aposta.",
-                      variant: "default",
-                    });
-                  }
-                } else {
-                  toast({
-                    title: "Depósito realizado com sucesso!",
-                    description: "Seu saldo foi atualizado. Você já pode fazer suas apostas.",
-                    variant: "default",
-                  });
-                }
-              } catch (error) {
-                console.error("Erro ao verificar saldo após depósito:", error);
-                toast({
-                  title: "Depósito realizado com sucesso!",
-                  description: "Seu saldo foi atualizado. Você já pode fazer suas apostas.",
-                  variant: "default",
-                });
-              }
-            };
-            
-            // Executar a função assíncrona
-            checkDepositAndBet();
-          }}
-        />
+
       </>
     );
   }
@@ -1375,7 +1332,7 @@ export function MobileBetWizardNew({
             Aposta Rápida
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm h-fit max-h-[70vh] overflow-y-auto p-0">
           <Form {...form}>
             <div>
               {renderStepContent()}
@@ -1433,69 +1390,7 @@ export function MobileBetWizardNew({
           }}
         />
       )}
-      
-      {/* Diálogo de depósito */}
-      <DepositDialog
-        open={showDepositDialog}
-        onOpenChange={setShowDepositDialog}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-          
-          // Solicitar os dados atualizados do usuário
-          const checkDepositAndBet = async () => {
-            try {
-              // Apenas tenta processar a aposta se tiver dados salvos
-              if (savedBetData && user) {
-                const response = await apiRequest("GET", "/api/user");
-                const updatedUser = await response.json();
-                
-                console.log("Verificando saldo para processar aposta após depósito:", {
-                  updatedBalance: updatedUser?.balance || 0,
-                  requiredAmount: requiredAmount
-                });
-                
-                if (updatedUser && updatedUser.balance >= requiredAmount) {
-                  // Processar a aposta salva
-                  console.log("Processando aposta salva após depósito", savedBetData);
-                  betMutation.mutate(savedBetData);
-                  
-                  // Limpar dados de aposta salva (nova abordagem)
-                  setSavedBetData(null);
-                  setRequiredAmount(0);
-                  
-                  toast({
-                    title: "Depósito realizado e aposta processada!",
-                    description: "Seu saldo foi atualizado e sua aposta foi registrada automaticamente.",
-                    variant: "default",
-                  });
-                } else {
-                  toast({
-                    title: "Depósito realizado com sucesso!",
-                    description: "Seu saldo foi atualizado, mas ainda é insuficiente para a aposta.",
-                    variant: "default",
-                  });
-                }
-              } else {
-                toast({
-                  title: "Depósito realizado com sucesso!",
-                  description: "Seu saldo foi atualizado. Você já pode fazer suas apostas.",
-                  variant: "default",
-                });
-              }
-            } catch (error) {
-              console.error("Erro ao verificar saldo após depósito:", error);
-              toast({
-                title: "Depósito realizado com sucesso!",
-                description: "Seu saldo foi atualizado. Você já pode fazer suas apostas.",
-                variant: "default",
-              });
-            }
-          };
-          
-          // Executar a função assíncrona
-          checkDepositAndBet();
-        }}
-      />
+
     </>
   );
 }
