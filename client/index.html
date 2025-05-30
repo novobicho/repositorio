@@ -6,6 +6,343 @@
   </head>
   <body>
     <div id="root"></div>
+    
+    <!-- Menu Mobile Bottom Navigation -->
+    <div id="html-test-menu" style="
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      width: 100vw !important;
+      height: 70px !important;
+      background: linear-gradient(135deg, var(--system-main-color, #9333ea) 0%, var(--system-secondary-color, #a855f7) 50%, var(--system-secondary-color, #c084fc) 100%) !important;
+      z-index: 2147483647 !important;
+      display: none !important;
+      justify-content: space-around !important;
+      align-items: center !important;
+      border-top: 1px solid rgba(255,255,255,0.1) !important;
+      color: white !important;
+      font-size: 10px !important;
+      font-weight: 500 !important;
+      font-family: system-ui, -apple-system, sans-serif !important;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.4) !important;
+      pointer-events: auto !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    ">
+      <!-- Menu -->
+      <div onclick="handleMenuClick()" style="
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        min-width: 50px !important;
+      " onmouseover="this.style.backgroundColor='rgba(255,255,255,0.1)'" onmouseout="this.style.backgroundColor='transparent'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px !important;">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9,22 9,12 15,12 15,22"/>
+        </svg>
+        <div>INICIO</div>
+      </div>
+      
+      <!-- Resultados -->
+      <div onclick="handleResultsClick()" style="
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        min-width: 50px !important;
+      " onmouseover="this.style.backgroundColor='rgba(255,255,255,0.1)'" onmouseout="this.style.backgroundColor='transparent'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px !important;">
+          <circle cx="12" cy="8" r="6"/>
+          <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>
+        </svg>
+        <div>RESULTADOS</div>
+      </div>
+      
+      <!-- Apostar (Destacado) -->
+      <div onclick="handleBetClick()" style="
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        padding: 10px 16px !important;
+        border-radius: 12px !important;
+        background: linear-gradient(135deg, var(--system-accent-color, #ea580c) 0%, var(--system-accent-color, #f97316) 50%, var(--system-accent-color, #fb923c) 100%) !important;
+        box-shadow: 0 4px 12px rgba(249,115,22,0.4) !important;
+        transform: translateY(-2px) !important;
+        transition: all 0.2s ease !important;
+        min-width: 60px !important;
+        border: 2px solid rgba(255,255,255,0.2) !important;
+      " onmouseover="this.style.transform='translateY(-4px) scale(1.05)'" onmouseout="this.style.transform='translateY(-2px) scale(1)'">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px !important;">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        <div style="font-weight: 700 !important;">APOSTAR</div>
+      </div>
+      
+      <!-- Cotação -->
+      <div onclick="handleQuotesClick()" style="
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        min-width: 50px !important;
+      " onmouseover="this.style.backgroundColor='rgba(255,255,255,0.1)'" onmouseout="this.style.backgroundColor='transparent'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px !important;">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+        <div>COTAÇÃO</div>
+      </div>
+      
+      <!-- Carteira -->
+      <div onclick="handleWalletClick()" style="
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        min-width: 50px !important;
+      " onmouseover="this.style.backgroundColor='rgba(255,255,255,0.1)'" onmouseout="this.style.backgroundColor='transparent'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px !important;">
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+          <path d="M3 5c0-1.66 4-3 9-3s9 1.34 9 3v14c0 1.66-4 3-9 3s-9-1.34-9-3V5z"/>
+          <path d="M3 12v7c0 1.66 4 3 9 3s9-1.34 9-3v-7"/>
+        </svg>
+        <div>CARTEIRA</div>
+      </div>
+    </div>
+    
+    <script>
+      // Cache das cores para evitar lag inicial
+      let cachedColors = null;
+      
+      // Tentar carregar cores do cache local primeiro
+      function loadCachedColors() {
+        try {
+          const cached = localStorage.getItem('system-colors');
+          if (cached) {
+            cachedColors = JSON.parse(cached);
+            const root = document.documentElement;
+            root.style.setProperty('--system-main-color', cachedColors.main);
+            root.style.setProperty('--system-secondary-color', cachedColors.secondary);
+            root.style.setProperty('--system-accent-color', cachedColors.accent);
+            console.log('⚡ Cores do cache aplicadas instantaneamente:', cachedColors);
+            return true;
+          }
+        } catch (error) {
+          console.log('Cache de cores não disponível');
+        }
+        return false;
+      }
+      
+      // Carregar cores do sistema e atualizar cache
+      async function setSystemCSSColors() {
+        try {
+          const response = await fetch('/api/settings');
+          const settings = await response.json();
+          const colors = {
+            main: settings.mainColor || '#9333ea',
+            secondary: settings.secondaryColor || '#a855f7',
+            accent: settings.accentColor || '#f97316'
+          };
+          
+          // Atualizar variáveis CSS
+          const root = document.documentElement;
+          root.style.setProperty('--system-main-color', colors.main);
+          root.style.setProperty('--system-secondary-color', colors.secondary);
+          root.style.setProperty('--system-accent-color', colors.accent);
+          
+          // Salvar no cache para próximas visitas
+          localStorage.setItem('system-colors', JSON.stringify(colors));
+          cachedColors = colors;
+          
+          console.log('🎨 Cores atualizadas do sistema:', colors);
+        } catch (error) {
+          console.log('Erro ao carregar cores do sistema');
+          // Se não há cache e falha na API, usar cores padrão
+          if (!cachedColors) {
+            const root = document.documentElement;
+            root.style.setProperty('--system-main-color', '#9333ea');
+            root.style.setProperty('--system-secondary-color', '#a855f7');
+            root.style.setProperty('--system-accent-color', '#f97316');
+          }
+        }
+      }
+      
+      // Aplicar cores instantaneamente do cache se disponível
+      loadCachedColors();
+      
+      // Buscar cores atualizadas da API
+      setSystemCSSColors();
+      
+      // Detectar se é dispositivo mobile
+      function isMobileDevice() {
+        return window.innerWidth <= 768 || 
+               /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      }
+      
+      // Buscar cores do sistema (mantido para compatibilidade)
+      async function getSystemColors() {
+        try {
+          const response = await fetch('/api/settings');
+          const settings = await response.json();
+          return {
+            main: settings.mainColor || '#9333ea',
+            secondary: settings.secondaryColor || '#a855f7',
+            accent: settings.accentColor || '#f97316'
+          };
+        } catch (error) {
+          return {
+            main: '#9333ea',
+            secondary: '#a855f7', 
+            accent: '#f97316'
+          };
+        }
+      }
+      
+      // Aplicar cores do sistema ao menu
+      async function applySystemColorsToMenu() {
+        const colors = await getSystemColors();
+        const menu = document.getElementById('html-test-menu');
+        if (menu) {
+          // Aplicar gradiente com as cores do sistema
+          menu.style.background = `linear-gradient(135deg, ${colors.main} 0%, ${colors.secondary} 50%, ${colors.secondary}dd 100%)`;
+          console.log('🎨 Cores do sistema aplicadas ao menu:', colors);
+          
+          // Aplicar cor de destaque no botão apostar
+          const betButton = menu.querySelector('[onclick="handleBetClick()"]');
+          if (betButton) {
+            betButton.style.background = `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accent}dd 50%, ${colors.accent}bb 100%)`;
+          }
+        }
+      }
+      
+      // Função para verificar se o usuário está autenticado
+      async function isUserAuthenticated() {
+        try {
+          const response = await fetch('/api/user', {
+            method: 'GET',
+            credentials: 'include'
+          });
+          return response.ok;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      // Script para garantir que o menu permaneça visível apenas em mobile e quando logado
+      async function forceMenuVisible() {
+        const menu = document.getElementById('html-test-menu');
+        if (menu) {
+          const isAuthenticated = await isUserAuthenticated();
+          
+          if (isMobileDevice() && isAuthenticated) {
+            menu.style.display = 'flex';
+            menu.style.position = 'fixed';
+            menu.style.bottom = '0';
+            menu.style.left = '0';
+            menu.style.right = '0';
+            menu.style.width = '100vw';
+            menu.style.height = '70px';
+            menu.style.zIndex = '2147483647';
+            menu.style.visibility = 'visible';
+            menu.style.opacity = '1';
+            menu.style.pointerEvents = 'auto';
+            
+            // Aplicar cores do sistema
+            await applySystemColorsToMenu();
+            
+            console.log('🔥 Menu mobile ativo com cores do sistema');
+          } else {
+            menu.style.display = 'none';
+            if (!isAuthenticated) {
+              console.log('🔒 Usuário não autenticado - menu oculto');
+            } else {
+              console.log('💻 Desktop detectado - menu oculto');
+            }
+          }
+        }
+      }
+      
+      // Funções de navegação integradas com React
+      function handleMenuClick() {
+        console.log('📱 INICIO clicado - sempre vai para página inicial');
+        // Disparar evento customizado para navegar para página inicial
+        window.dispatchEvent(new CustomEvent('mobile-nav', { 
+          detail: 'home' 
+        }));
+      }
+      
+      function handleResultsClick() {
+        console.log('📊 Resultados clicado');
+        window.dispatchEvent(new CustomEvent('mobile-nav', { 
+          detail: { section: 'results' } 
+        }));
+      }
+      
+      function handleBetClick() {
+        console.log('🎯 Apostar clicado');
+        window.dispatchEvent(new CustomEvent('mobile-nav', { 
+          detail: { section: 'bet' } 
+        }));
+      }
+      
+      function handleQuotesClick() {
+        console.log('💰 Cotação clicado');
+        window.dispatchEvent(new CustomEvent('mobile-nav', { 
+          detail: { section: 'quotes' } 
+        }));
+      }
+      
+      function handleWalletClick() {
+        console.log('💳 CARTEIRA clicado - sempre vai para painel de usuário');
+        window.dispatchEvent(new CustomEvent('mobile-nav', { 
+          detail: 'wallet' 
+        }));
+      }
+      
+      // Detectar mudanças nas configurações do sistema
+      let lastSettingsCheck = 0;
+      async function checkForSettingsUpdates() {
+        const now = Date.now();
+        if (now - lastSettingsCheck > 2000) { // Verificar a cada 2 segundos
+          lastSettingsCheck = now;
+          if (isMobileDevice()) {
+            await applySystemColorsToMenu();
+          }
+        }
+      }
+      
+      // Executar imediatamente
+      forceMenuVisible();
+      
+      // Executar depois que a página carregar
+      document.addEventListener('DOMContentLoaded', forceMenuVisible);
+      
+      // Executar periodicamente para garantir visibilidade e atualizar cores
+      setInterval(async () => {
+        await forceMenuVisible();
+        await checkForSettingsUpdates();
+      }, 500);
+    </script>
+    
     <script type="module" src="/src/main.tsx"></script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
