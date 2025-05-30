@@ -9,13 +9,13 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   email: text("email"),
   name: text("name"),
-  // Removido: cpf: text("cpf").unique(),
+  cpf: text("cpf").unique(),
   balance: real("balance").default(0).notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),
   blocked: boolean("blocked").default(false).notNull(),
   blockReason: text("block_reason"),
-  // Removido: defaultPixKey: text("default_pix_key"),
-  // Removido: defaultPixKeyType: text("default_pix_key_type"),
+  defaultPixKey: text("default_pix_key"),
+  defaultPixKeyType: text("default_pix_key_type"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -26,6 +26,10 @@ export const insertUserSchema = createInsertSchema(users).omit({
   balance: true,
   blocked: true,
   blockReason: true,
+  defaultPixKey: true,
+  defaultPixKeyType: true,
+}).extend({
+  cpf: z.string().min(11, "CPF deve ter 11 dígitos").max(14, "CPF inválido").regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/, "Formato de CPF inválido"),
 });
 
 // Removido - tipo duplicado será definido mais abaixo
